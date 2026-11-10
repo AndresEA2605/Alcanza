@@ -2,17 +2,16 @@ import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
-  Image,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import type { BusinessCalculation, BusinessItem } from '../../src/domain/business';
+import type { BusinessItem } from '../../src/domain/business';
 import { formatCOP } from '../../src/domain/money';
 import { useBusinessStore } from '../../src/store/useBusinessStore';
 import { useTheme } from '../../src/theme';
@@ -24,6 +23,7 @@ import { FloatingActionButton } from '../../src/ui/FloatingActionButton';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { LoadingState } from '../../src/ui/LoadingState';
 import { PrimaryButton } from '../../src/ui/PrimaryButton';
+import { BusinessItemCard } from '../../src/ui/business/BusinessItemCard';
 
 type FilterType = 'all' | 'product' | 'service';
 
@@ -107,7 +107,7 @@ export default function NegocioIndexScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <ScrollView
           contentContainerStyle={[
             styles.scrollContent,
@@ -420,216 +420,6 @@ export default function NegocioIndexScreen() {
   );
 }
 
-/**
- * Tarjeta espaciosa, legible y accesible para cada ítem del negocio.
- */
-function BusinessItemCard({
-  item,
-  calculation,
-  onEdit,
-  onDelete,
-}: {
-  item: BusinessItem;
-  calculation?: BusinessCalculation;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const theme = useTheme();
-  const isProduct = item.type === 'product';
-
-  const profit = calculation?.profit ?? 0;
-  const revenue = calculation?.revenue ?? item.pricePerUnit * item.quantity;
-  const cost = calculation?.cost ?? (isProduct ? item.investment : 0);
-
-  return (
-    <GlassCard contentStyle={styles.cardContent}>
-      {/* Cabecera de la tarjeta: Categoría y Ganancia destacada */}
-      <View style={styles.cardTopRow}>
-        <View
-          style={[
-            styles.typeBadge,
-            {
-              backgroundColor: isProduct
-                ? theme.colors.accentSoft
-                : theme.colors.successSoft,
-            },
-          ]}
-        >
-          <Text
-            style={[
-              styles.typeBadgeText,
-              {
-                color: isProduct ? theme.colors.accent : theme.colors.success,
-              },
-            ]}
-          >
-            {isProduct ? '📦 Producto' : '🚗 Servicio'}
-          </Text>
-        </View>
-
-        <View style={styles.profitBadge}>
-          <Text style={[styles.profitLabel, { color: theme.colors.textMuted }]}>
-            Ganancia
-          </Text>
-          <Text
-            style={[
-              styles.profitNumber,
-              {
-                color:
-                  profit >= 0 ? theme.colors.success : theme.colors.danger,
-              },
-            ]}
-            maxFontSizeMultiplier={1.3}
-          >
-            {profit >= 0 ? '+' : ''}
-            {formatCOP(Math.round(profit))}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.itemIdentity}>
-        {item.imageUri ? (
-          <Image
-            source={{ uri: item.imageUri }}
-            style={styles.itemImage}
-            accessibilityLabel={`Imagen de ${item.name}`}
-          />
-        ) : null}
-        <View style={styles.itemTitleGroup}>
-          <Text
-            style={[styles.itemName, { color: theme.colors.text }]}
-            maxFontSizeMultiplier={1.3}
-          >
-            {item.name}
-          </Text>
-          {item.description ? (
-            <Text
-              style={[styles.itemDescription, { color: theme.colors.textSecondary }]}
-              numberOfLines={3}
-            >
-              {item.description}
-            </Text>
-          ) : null}
-        </View>
-      </View>
-
-      {/* Grid de indicadores claros y espaciosos */}
-      <View style={styles.detailsGrid}>
-        <View style={styles.detailItem}>
-          <Text style={[styles.detailItemLabel, { color: theme.colors.textSecondary }]}>
-            Precio venta
-          </Text>
-          <Text
-            style={[styles.detailItemValue, { color: theme.colors.text }]}
-            maxFontSizeMultiplier={1.3}
-          >
-            {formatCOP(Math.round(item.pricePerUnit))}
-          </Text>
-        </View>
-
-        <View style={styles.detailItem}>
-          <Text style={[styles.detailItemLabel, { color: theme.colors.textSecondary }]}>
-            Cantidad diaria
-          </Text>
-          <Text
-            style={[styles.detailItemValue, { color: theme.colors.text }]}
-            maxFontSizeMultiplier={1.3}
-          >
-            {item.quantity} {isProduct ? 'unidades' : 'servicios'}
-          </Text>
-        </View>
-
-        <View style={styles.detailItem}>
-          <Text style={[styles.detailItemLabel, { color: theme.colors.textSecondary }]}>
-            Ingreso diario
-          </Text>
-          <Text
-            style={[styles.detailItemValue, { color: theme.colors.text }]}
-            maxFontSizeMultiplier={1.3}
-          >
-            {formatCOP(Math.round(revenue))}
-          </Text>
-        </View>
-
-        <View style={styles.detailItem}>
-          <Text style={[styles.detailItemLabel, { color: theme.colors.textSecondary }]}>
-            {isProduct ? 'Costo inversión' : 'Costo operativo'}
-          </Text>
-          <Text
-            style={[styles.detailItemValue, { color: theme.colors.textSecondary }]}
-            maxFontSizeMultiplier={1.3}
-          >
-            {isProduct ? formatCOP(Math.round(cost)) : 'Sin costo'}
-          </Text>
-        </View>
-      </View>
-
-      {/* Meta del periodo configurado */}
-      {item.goalAmount > 0 ? (
-        <View
-          style={[
-            styles.itemGoalBox,
-            {
-              backgroundColor: theme.colors.inputBackground,
-              borderColor: theme.colors.separator,
-            },
-          ]}
-        >
-          <Text style={[styles.itemGoalText, { color: theme.colors.textSecondary }]}>
-            Meta {item.goalPeriod === 'daily' ? 'diaria' : item.goalPeriod === 'monthly' ? 'mensual' : 'anual'}:{' '}
-            <Text style={{ fontWeight: '700', color: theme.colors.text }}>
-              {formatCOP(Math.round(item.goalAmount))}
-            </Text>
-          </Text>
-          {calculation?.goalReached ? (
-            <Text style={[styles.itemGoalAchieved, { color: theme.colors.success }]}>
-              ✓ Cumplida
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
-
-      {/* Acciones de la tarjeta */}
-      <View style={styles.cardActions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Editar ${item.name}`}
-          onPress={onEdit}
-          style={[
-            styles.actionButton,
-            {
-              borderColor: theme.colors.separator,
-              backgroundColor: theme.colors.inputBackground,
-            },
-          ]}
-        >
-          <Text style={[styles.actionButtonText, { color: theme.colors.text }]}>
-            ✏️ Editar
-          </Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Eliminar ${item.name}`}
-          onPress={onDelete}
-          style={[
-            styles.actionButton,
-            {
-              borderColor: theme.colors.separator,
-              backgroundColor: theme.colors.inputBackground,
-            },
-          ]}
-        >
-          <Text
-            style={[styles.actionButtonText, { color: theme.colors.danger }]}
-          >
-            🗑️ Eliminar
-          </Text>
-        </Pressable>
-      </View>
-    </GlassCard>
-  );
-}
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
@@ -780,110 +570,5 @@ const styles = StyleSheet.create({
   itemsContainer: {
     gap: 14,
   },
-  cardContent: {
-    gap: 12,
-  },
-  cardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  typeBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  typeBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  profitBadge: {
-    alignItems: 'flex-end',
-  },
-  profitLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  profitNumber: {
-    fontSize: 18,
-    lineHeight: 24,
-    fontWeight: '800',
-  },
-  itemName: {
-    fontSize: 20,
-    lineHeight: 26,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
-  itemIdentity: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  itemImage: {
-    width: 64,
-    height: 64,
-    borderRadius: 14,
-    backgroundColor: '#80808022',
-  },
-  itemTitleGroup: {
-    flex: 1,
-    gap: 3,
-  },
-  itemDescription: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  detailsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 2,
-  },
-  detailItem: {
-    width: '47%',
-    gap: 2,
-  },
-  detailItemLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  detailItemValue: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: '700',
-  },
-  itemGoalBox: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  itemGoalText: {
-    fontSize: 12,
-  },
-  itemGoalAchieved: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  cardActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 4,
-  },
-  actionButton: {
-    flex: 1,
-    paddingVertical: 9,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
+
 });

@@ -117,7 +117,7 @@ describe('configRepo', () => {
     await expect(getMonthConfig(testDb.db, '2026-01')).resolves.toBeNull();
   });
 
-  it('borra todos los datos de ambas tablas', async () => {
+  it('borra los datos financieros y del negocio y devuelve las imágenes', async () => {
     await upsertMonthConfig(testDb.db, {
       month: '2026-01',
       income: 3_000_000,
@@ -129,19 +129,81 @@ describe('configRepo', () => {
       category: 'comida',
       ts: new Date(2026, 0, 15, 12).getTime(),
     });
+    await testDb.db.runAsync(
+      `INSERT INTO income_entry (id, amount, description, ts)
+       VALUES (?, ?, ?, ?)`,
+      'income-1',
+      100_000,
+      'Venta',
+      new Date(2026, 0, 15, 13).getTime(),
+    );
+    await testDb.db.runAsync(
+      `INSERT INTO business_item (
+         id, name, type, quantity, price_per_unit, investment, daily_goal,
+         created_at, updated_at, image_uri
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      'item-1',
+      'Producto',
+      'product',
+      1,
+      20_000,
+      10_000,
+      0,
+      1,
+      1,
+      'file:///documents/business-product.jpg',
+    );
+    await testDb.db.runAsync(
+      `INSERT INTO business_account (id, name, type, amount, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      'account-1',
+      'Efectivo',
+      'cash',
+      50_000,
+      1,
+      1,
+    );
 
-    await clearAllData(testDb.db);
+    await expect(clearAllData(testDb.db)).resolves.toEqual([
+      'file:///documents/business-product.jpg',
+    ]);
 
     await expect(getMonthConfig(testDb.db, '2026-01')).resolves.toBeNull();
 
-    const configCount = await testDb.db.getFirstAsync<{ count: number }>(
-      'SELECT COUNT(*) AS count FROM month_config',
-    );
+    for (const table of [
+      'month_config',
+      'expense',
+      'income_entry',
+      'business_item',
+      'business_account',
+    ]) {
+      const result = await testDb.db.getFirstAsync<{ count: number }>(
+        `SELECT COUNT(*) AS count FROM ${table}`,
+      );
+      expect(result?.count).toBe(0);
+    }
+  });
+
+  it('borra el resto de los datos aunque falte business_account', async () => {
+    await upsertMonthConfig(testDb.db, {
+      month: '2026-01',
+      income: 3_000_000,
+      fixed: 1_000_000,
+    });
+    await createExpense(testDb.db, {
+      id: 'expense-1',
+      amount: 25_000,
+      category: 'comida',
+      ts: new Date(2026, 0, 15, 12).getTime(),
+    });
+    await testDb.db.execAsync('DROP TABLE business_account');
+
+    await expect(clearAllData(testDb.db)).resolves.toEqual([]);
+
+    await expect(getMonthConfig(testDb.db, '2026-01')).resolves.toBeNull();
     const expenseCount = await testDb.db.getFirstAsync<{ count: number }>(
       'SELECT COUNT(*) AS count FROM expense',
     );
-
-    expect(configCount?.count).toBe(0);
     expect(expenseCount?.count).toBe(0);
   });
 });

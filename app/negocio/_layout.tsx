@@ -12,9 +12,6 @@ export default function NegocioLayout() {
         animation: 'fade',
         contentStyle: { backgroundColor: theme.colors.background },
       }}
-    >
-      <Stack.Screen name="nuevo" />
-      <Stack.Screen name="editar/[id]" />
-    </Stack>
+    />
   );
 }

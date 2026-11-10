@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
   Pressable,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -148,10 +150,14 @@ export function ExpenseSheet({
       animationType="fade"
       hardwareAccelerated
     >
-      <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.scrim }]}
-        edges={['top', 'left', 'right']}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoiding}
       >
+        <SafeAreaView
+          style={[styles.container, { backgroundColor: theme.colors.scrim }]}
+          edges={['top', 'left', 'right', 'bottom']}
+        >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Cerrar hoja de registro"
@@ -501,19 +507,25 @@ export function ExpenseSheet({
             ) : null}
           </ScrollView>
         </View>
-      </SafeAreaView>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  keyboardAvoiding: {
+    flex: 1,
+  },
   container: {
     flex: 1,
+    justifyContent: 'flex-end',
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 8,
   },
   sheet: {
+    width: '100%',
     flexShrink: 1,
     maxHeight: '94%',
     borderRadius: 24,

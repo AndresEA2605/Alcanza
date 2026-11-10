@@ -84,12 +84,20 @@ export function SpendingMarginBar({
   }));
 
   const isHoy = margin.mode === 'hoy';
+  const isSemana = margin.mode === 'semana';
 
   if (compact) {
+    const periodLabel =
+      margin.mode === 'hoy'
+        ? 'hoy'
+        : margin.mode === 'semana'
+          ? 'esta semana'
+          : 'este mes';
+
     return (
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Margen de gasto de hoy al ${margin.percentage}%. ${margin.headline}. Toca para abrir balance.`}
+        accessibilityLabel={`Margen de gasto para ${periodLabel} al ${margin.percentage}%. ${margin.headline}. Toca para abrir balance.`}
         onPress={onPressDetail}
         style={({ pressed }) => [
           styles.compactContainer,
@@ -103,22 +111,41 @@ export function SpendingMarginBar({
       >
         <View style={styles.compactTopRow}>
           <View style={styles.compactLeft}>
-            <View style={[styles.compactDot, { backgroundColor: activeColor }]} />
-            <Text style={[styles.compactTitle, { color: theme.colors.text }]}>
-              Margen de hoy: <Text style={{ fontWeight: '800', color: activeColor }}>{margin.percentage}%</Text>
-            </Text>
+            <View style={styles.compactHeading}>
+              <View
+                style={[styles.compactDot, { backgroundColor: activeColor }]}
+              />
+              <Text
+                style={[styles.compactTitle, { color: theme.colors.text }]}
+                numberOfLines={1}
+              >
+                Margen de {periodLabel}
+              </Text>
+              <Text
+                style={[styles.compactPercentage, { color: activeColor }]}
+              >
+                {margin.percentage}%
+              </Text>
+            </View>
             <Text
-              style={[styles.compactHeadline, { color: theme.colors.textSecondary }]}
-              numberOfLines={1}
+              style={[
+                styles.compactHeadline,
+                { color: theme.colors.textSecondary },
+              ]}
+              numberOfLines={2}
             >
-              • {margin.headline}
+              {margin.headline}
             </Text>
           </View>
-
           {onPressDetail ? (
             <View style={styles.compactLinkWrapper}>
-              <Text style={[styles.compactLinkText, { color: theme.colors.accent }]}>
-                Balance ›
+              <Text
+                style={[
+                  styles.compactLinkText,
+                  { color: theme.colors.accent },
+                ]}
+              >
+                Ver balance
               </Text>
             </View>
           ) : null}
@@ -161,14 +188,18 @@ export function SpendingMarginBar({
             style={[styles.title, { color: theme.colors.text }]}
             maxFontSizeMultiplier={1.3}
           >
-            {isHoy ? 'Cuota diaria de hoy' : 'Presupuesto del mes'}
+            {isHoy
+              ? 'Cuota diaria de hoy'
+              : isSemana
+                ? 'Presupuesto de la semana'
+                : 'Presupuesto del mes'}
           </Text>
         </View>
 
         <StatusPill status={budgetStatus} />
       </View>
 
-      {/* Selector de modo opcional (Hoy / Mes) */}
+      {/* Selector de periodo */}
       {onToggleMode ? (
         <View
           style={[
@@ -202,24 +233,52 @@ export function SpendingMarginBar({
 
           <Pressable
             accessibilityRole="tab"
-            accessibilityState={{ selected: !isHoy }}
-            accessibilityLabel="Margen del mes"
-            onPress={() => onToggleMode('mes')}
+            accessibilityState={{ selected: isSemana }}
+            accessibilityLabel="Margen de esta semana"
+            onPress={() => onToggleMode('semana')}
             style={[
               styles.modeButton,
-              !isHoy && { backgroundColor: theme.colors.surfaceStrong },
+              isSemana && { backgroundColor: theme.colors.surfaceStrong },
             ]}
           >
             <Text
               style={[
                 styles.modeButtonText,
                 {
-                  color: !isHoy ? theme.colors.text : theme.colors.textMuted,
-                  fontWeight: !isHoy ? '700' : '500',
+                  color: isSemana ? theme.colors.text : theme.colors.textMuted,
+                  fontWeight: isSemana ? '700' : '500',
                 },
               ]}
             >
-              Mes completo
+              Semana
+            </Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: margin.mode === 'mes' }}
+            accessibilityLabel="Margen del mes"
+            onPress={() => onToggleMode('mes')}
+            style={[
+              styles.modeButton,
+              margin.mode === 'mes' && {
+                backgroundColor: theme.colors.surfaceStrong,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.modeButtonText,
+                {
+                  color:
+                    margin.mode === 'mes'
+                      ? theme.colors.text
+                      : theme.colors.textMuted,
+                  fontWeight: margin.mode === 'mes' ? '700' : '500',
+                },
+              ]}
+            >
+              Mes
             </Text>
           </Pressable>
         </View>
@@ -248,7 +307,11 @@ export function SpendingMarginBar({
 
         <View style={[styles.metricItem, styles.metricRight]}>
           <Text style={[styles.metricLabel, { color: theme.colors.textSecondary }]}>
-            {isHoy ? 'Queda hoy en margen' : 'Queda en el mes'}
+            {isHoy
+              ? 'Queda hoy en margen'
+              : isSemana
+                ? 'Queda esta semana'
+                : 'Queda en el mes'}
           </Text>
           <Text
             style={[
@@ -509,42 +572,54 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   compactContainer: {
-    padding: 12,
+    padding: 14,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    gap: 8,
+    gap: 12,
     width: '100%',
   },
   compactTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 8,
+    alignItems: 'flex-start',
+    gap: 12,
   },
   compactLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 6,
     flex: 1,
+  },
+  compactHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
   },
   compactDot: {
     width: 7,
     height: 7,
     borderRadius: 4,
+    flexShrink: 0,
   },
   compactTitle: {
     fontSize: 12,
+    lineHeight: 17,
     fontWeight: '600',
+    flexShrink: 1,
+  },
+  compactPercentage: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '800',
   },
   compactHeadline: {
     fontSize: 12,
-    flexShrink: 1,
+    lineHeight: 17,
   },
   compactLinkWrapper: {
-    paddingLeft: 4,
+    paddingTop: 1,
   },
   compactLinkText: {
-    fontSize: 12,
+    fontSize: 11,
+    lineHeight: 16,
     fontWeight: '700',
   },
   compactBarTrack: {

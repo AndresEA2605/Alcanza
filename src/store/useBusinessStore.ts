@@ -11,9 +11,11 @@ import type { Database } from '../data/migrations';
 import {
   createBusinessItem,
   deleteBusinessItem,
+  getBusinessItemById,
   listBusinessItems,
   updateBusinessItem,
 } from '../data/businessRepo';
+import { deleteProductImages } from '../data/productImageStorage';
 
 export interface BusinessStoreState {
   status: 'idle' | 'loading' | 'ready' | 'error';
@@ -99,10 +101,15 @@ export const useBusinessStore = create<BusinessStoreState>()((set, get) => ({
   updateItem: async (id, input) => {
     try {
       const db = await getDatabase();
+      const existing = await getBusinessItemById(db, id);
       const updated = await updateBusinessItem(db, id, input);
 
       if (!updated) {
         throw new Error('No encontré ese producto o servicio.');
+      }
+
+      if (existing?.imageUri && existing.imageUri !== updated.imageUri) {
+        deleteProductImages([existing.imageUri]);
       }
 
       await refreshItems(set, db);
@@ -117,10 +124,15 @@ export const useBusinessStore = create<BusinessStoreState>()((set, get) => ({
   deleteItem: async (id) => {
     try {
       const db = await getDatabase();
+      const existing = await getBusinessItemById(db, id);
       const deleted = await deleteBusinessItem(db, id);
 
       if (!deleted) {
         throw new Error('No pude eliminar ese producto o servicio.');
+      }
+
+      if (existing?.imageUri) {
+        deleteProductImages([existing.imageUri]);
       }
 
       await refreshItems(set, db);

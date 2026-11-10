@@ -222,8 +222,36 @@ describe('useBudgetStore', () => {
       amount: 50_000,
       category: 'comida',
     });
+    await testDb.db.runAsync(
+      `INSERT INTO business_item (
+         id, name, type, quantity, price_per_unit, investment, daily_goal,
+         created_at, updated_at, image_uri
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      'item-1',
+      'Producto',
+      'product',
+      1,
+      20_000,
+      10_000,
+      0,
+      1,
+      1,
+      'file:///documents/business-product.jpg',
+    );
+    await testDb.db.runAsync(
+      `INSERT INTO business_account (id, name, type, amount, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      'account-1',
+      'Efectivo',
+      'cash',
+      50_000,
+      1,
+      1,
+    );
 
-    await useBudgetStore.getState().resetData();
+    await expect(useBudgetStore.getState().resetData()).resolves.toEqual([
+      'file:///documents/business-product.jpg',
+    ]);
 
     const state = useBudgetStore.getState();
     expect(state.config).toBeNull();
@@ -238,8 +266,16 @@ describe('useBudgetStore', () => {
     const expenseCount = await testDb.db.getFirstAsync<{ count: number }>(
       'SELECT COUNT(*) AS count FROM expense',
     );
+    const itemCount = await testDb.db.getFirstAsync<{ count: number }>(
+      'SELECT COUNT(*) AS count FROM business_item',
+    );
+    const accountCount = await testDb.db.getFirstAsync<{ count: number }>(
+      'SELECT COUNT(*) AS count FROM business_account',
+    );
     expect(configCount?.count).toBe(0);
     expect(expenseCount?.count).toBe(0);
+    expect(itemCount?.count).toBe(0);
+    expect(accountCount?.count).toBe(0);
   });
 
   it('rechaza montos inválidos y gastos sin configuración', async () => {

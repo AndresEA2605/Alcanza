@@ -1,7 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState, useRef } from 'react';
 import {
-  Image,
   Alert,
   Platform,
   Pressable,
@@ -20,6 +19,7 @@ import { LoadingState } from '../../../src/ui/LoadingState';
 import { MoneyInput } from '../../../src/ui/MoneyInput';
 import { PrimaryButton } from '../../../src/ui/PrimaryButton';
 import { Screen } from '../../../src/ui/Screen';
+import { SecureProductImage } from '../../../src/ui/business/SecureProductImage';
 import {
   normalizeBusinessGoal,
   type BusinessGoalPeriod,
@@ -211,10 +211,10 @@ function EditForm({
         </FadeInView>
 
         {item.imageUri ? (
-          <Image
-            source={{ uri: item.imageUri }}
+          <SecureProductImage
+            uri={item.imageUri}
+            label={`Imagen de ${item.name}`}
             style={s.editImage}
-            accessibilityLabel={`Imagen de ${item.name}`}
           />
         ) : null}
 

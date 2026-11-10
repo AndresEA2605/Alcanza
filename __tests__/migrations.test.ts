@@ -74,6 +74,21 @@ describe('migraciones de la base de datos', () => {
     expect(await userVersion()).toBe(LATEST_DATABASE_VERSION);
   });
 
+  it('restaura business_account si falta en una base de datos de una versión anterior', async () => {
+    await migrateDatabase(testDb.db);
+    await testDb.db.execAsync('DROP TABLE business_account');
+    await testDb.db.execAsync('PRAGMA user_version = 5');
+
+    await migrateDatabase(testDb.db);
+
+    const table = await testDb.db.getFirstAsync<{ name: string }>(
+      `SELECT name FROM sqlite_master
+       WHERE type = 'table' AND name = 'business_account'`,
+    );
+    expect(table?.name).toBe('business_account');
+    expect(await userVersion()).toBe(LATEST_DATABASE_VERSION);
+  });
+
   it('conserva las metas existentes como metas diarias al migrar el negocio', async () => {
     for (const migration of MIGRATIONS.filter(({ version }) => version <= 4)) {
       await migration.up(testDb.db);

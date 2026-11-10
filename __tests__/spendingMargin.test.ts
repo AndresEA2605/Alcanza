@@ -233,6 +233,66 @@ describe('calcSpendingMargin: modo mes', () => {
   });
 });
 
+describe('calcSpendingMargin: modo semana', () => {
+  const JAN_15_2026 = at(2026, 0, 15, 12);
+
+  it('calcula el disponible proporcional de lunes a domingo y cuenta ingresos anteriores', () => {
+    const expenses = [
+      makeExpense({ amount: 500_000, ts: at(2026, 0, 5) }),
+      makeExpense({ amount: 100_000, ts: at(2026, 0, 13) }),
+      makeExpense({ amount: 100_000, ts: JAN_15_2026 }),
+      makeExpense({ amount: 900_000, ts: at(2026, 0, 20) }),
+    ];
+    const incomes = [
+      {
+        id: 'income-before-week',
+        amount: 50_000,
+        description: 'Ingreso anterior',
+        ts: at(2026, 0, 10),
+        deletedAt: null,
+      },
+      {
+        id: 'income-this-week',
+        amount: 200_000,
+        description: 'Ingreso de esta semana',
+        ts: at(2026, 0, 14),
+        deletedAt: null,
+      },
+    ];
+
+    const result = calcSpendingMargin(
+      { income: INCOME, fixed: FIXED, expenses, incomes, now: JAN_15_2026 },
+      { mode: 'semana' },
+    );
+
+    expect(result.mode).toBe('semana');
+    expect(result.limit).toBeCloseTo((3_000_000 + 50_000 - 1_000_000 - 500_000) / 20 * 7);
+    expect(result.spent).toBe(200_000);
+    expect(result.remaining).toBeCloseTo(result.limit - 200_000);
+    expect(result.daysLeft).toBe(4);
+    expect(result.status).toBe('bien');
+  });
+
+  it('recorta la semana al inicio del mes y excluye gastos de semanas anteriores', () => {
+    const result = calcSpendingMargin(
+      {
+        income: INCOME,
+        fixed: FIXED,
+        expenses: [
+          makeExpense({ amount: 100_000, ts: at(2025, 11, 31) }),
+          makeExpense({ amount: 200_000, ts: at(2026, 0, 1) }),
+        ],
+        now: at(2026, 0, 2),
+      },
+      { mode: 'semana' },
+    );
+
+    expect(result.limit).toBeCloseTo(DISPOSABLE / 31 * 4);
+    expect(result.spent).toBe(200_000);
+    expect(result.daysLeft).toBe(3);
+  });
+});
+
 describe('verifyExpenseMargin: sistema de verificación fuerte', () => {
   const JAN_15_2026 = at(2026, 0, 15, 12); // 17 días restantes, diario base ~117_647
 

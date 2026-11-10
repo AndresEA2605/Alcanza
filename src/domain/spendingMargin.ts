@@ -20,7 +20,7 @@ import { formatCOP } from './money';
 
 export type MarginTier = 'conservador' | 'normal' | 'flexible';
 export type MarginStatus = 'bien' | 'aviso' | 'limite';
-export type MarginMode = 'hoy' | 'mes';
+export type MarginMode = 'hoy' | 'semana' | 'mes';
 
 export interface MarginSection {
   readonly tier: MarginTier;
@@ -67,7 +67,7 @@ export const DEFAULT_MARGIN_SECTIONS: readonly MarginSection[] = [
 ] as const;
 
 export interface SpendingMarginResult {
-  /** Modo de análisis: hoy o mes. */
+  /** Modo de análisis: hoy, semana actual o mes. */
   mode: MarginMode;
   /** Porcentaje consumido acotado entre 0 y 100 para la barra gráfica. */
   percentage: number;
@@ -75,15 +75,15 @@ export interface SpendingMarginResult {
   rawPercentage: number;
   tier: MarginTier;
   status: MarginStatus;
-  /** Límite base razonable en COP (diario hoy o disponible mes). */
+  /** Límite razonable en COP para el periodo seleccionado. */
   limit: number;
-  /** Monto consumido en COP para este periodo. */
+  /** Monto consumido en COP para el periodo seleccionado. */
   spent: number;
   /** Monto restante en COP para este periodo. */
   remaining: number;
-  /** Pozo disponible para el resto del mes antes de hoy. */
+  /** Disponible mensual al inicio del periodo seleccionado. */
   pool: number;
-  /** Días restantes del mes, incluido hoy. */
+  /** Días restantes del periodo seleccionado, incluido hoy. */
   daysLeft: number;
   /** Estimado diario para mañana según el gasto actual. */
   tomorrowEstimated: number;
@@ -132,6 +132,123 @@ export function calcSpendingMargin(
   const daysLeft = today.daysLeft;
   const pool = today.pool;
   const tomorrowEstimated = today.tomorrow;
+
+  if (mode === 'semana') {
+    const currentDate = new Date(input.now);
+    const todayStart = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      currentDate.getDate(),
+    );
+    const monthStart = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      1,
+    );
+    const monthEnd = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth() + 1,
+      1,
+    );
+    const mondayOffset = (todayStart.getDay() + 6) % 7;
+    const weekStart = new Date(todayStart);
+    weekStart.setDate(weekStart.getDate() - mondayOffset);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    const periodStart = weekStart < monthStart ? monthStart : weekStart;
+    const periodEnd = weekEnd > monthEnd ? monthEnd : weekEnd;
+    const calendarDay = (date: Date) =>
+      Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+    const periodDays = Math.round(
+      (calendarDay(periodEnd) - calendarDay(periodStart)) / 86_400_000,
+    );
+    const monthDaysAtPeriodStart = Math.round(
+      (calendarDay(monthEnd) - calendarDay(periodStart)) / 86_400_000,
+    );
+
+    let spentBeforePeriod = 0;
+    let spentPeriod = 0;
+    for (const expense of input.expenses) {
+      if (
+        expense.deletedAt != null ||
+        expense.ts < monthStart.getTime() ||
+        expense.ts >= periodEnd.getTime()
+      ) {
+        continue;
+      }
+
+      if (expense.ts < periodStart.getTime()) {
+        spentBeforePeriod += expense.amount;
+      } else {
+        spentPeriod += expense.amount;
+      }
+    }
+
+    let incomeBeforePeriod = 0;
+    for (const income of input.incomes ?? []) {
+      if (
+        income.deletedAt == null &&
+        income.ts >= monthStart.getTime() &&
+        income.ts < periodStart.getTime()
+      ) {
+        incomeBeforePeriod += income.amount;
+      }
+    }
+
+    const availableAtPeriodStart =
+      input.income + incomeBeforePeriod - input.fixed - spentBeforePeriod;
+    const limit =
+      monthDaysAtPeriodStart > 0
+        ? (Math.max(availableAtPeriodStart, 0) / monthDaysAtPeriodStart) *
+          periodDays
+        : 0;
+    const remaining = limit - spentPeriod;
+    const rawPct = limit <= 0 ? 100 : (spentPeriod / limit) * 100;
+    const percentage = Math.min(100, Math.max(0, Math.round(rawPct)));
+    const resolved = resolveMarginTier(percentage, sections);
+    const tier = limit <= 0 ? 'flexible' : resolved.tier;
+    const status = limit <= 0 ? 'limite' : resolved.status;
+
+    let headline = 'Semana dentro de tu margen';
+    let explanation = `Has usado el ${percentage}% del margen de esta semana (${formatCOP(spentPeriod)} de ${formatCOP(Math.round(limit))}). Te quedan ${formatCOP(Math.round(remaining))}.`;
+
+    if (limit <= 0) {
+      headline = 'Sin margen disponible esta semana';
+      explanation =
+        'No hay presupuesto variable disponible para los días restantes de esta semana.';
+    } else if (remaining < 0) {
+      headline = 'Margen semanal superado';
+      explanation = `Has superado el margen de esta semana por ${formatCOP(Math.abs(Math.round(remaining)))}.`;
+    } else if (status === 'limite') {
+      headline = 'Llegando al límite semanal';
+      explanation = `Has utilizado el ${percentage}% del margen de esta semana. Te quedan ${formatCOP(Math.round(remaining))} para los días restantes.`;
+    } else if (status === 'aviso') {
+      headline = 'Consumo moderado de la semana';
+      explanation = `Has consumido el ${percentage}% del margen semanal. Mantén el ritmo para cuidar tu presupuesto mensual.`;
+    }
+
+    return {
+      mode,
+      percentage,
+      rawPercentage: rawPct,
+      tier,
+      status,
+      limit,
+      spent: spentPeriod,
+      remaining,
+      pool: availableAtPeriodStart,
+      daysLeft: Math.max(
+        0,
+        Math.round(
+          (calendarDay(periodEnd) - calendarDay(todayStart)) / 86_400_000,
+        ),
+      ),
+      tomorrowEstimated,
+      sections,
+      headline,
+      explanation,
+    };
+  }
 
   if (mode === 'mes') {
     const totalDisposable = Math.max(0, today.totalIncome - input.fixed);

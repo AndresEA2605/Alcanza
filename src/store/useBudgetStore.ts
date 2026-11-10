@@ -92,7 +92,7 @@ export interface BudgetStoreState {
   addIncome: (input: AddIncomeInput) => Promise<IncomeEntry>;
   deleteIncome: (id: string) => Promise<void>;
   undoDeleteIncome: () => Promise<void>;
-  resetData: () => Promise<void>;
+  resetData: () => Promise<string[]>;
 }
 
 export const initialBudgetState = {
@@ -526,7 +526,7 @@ export const useBudgetStore = create<BudgetStoreState>()((set, get) => ({
   resetData: async () => {
     try {
       const db = await getDatabase();
-      await clearAllData(db);
+      const productImageUris = await clearAllData(db);
 
       set({
         ...initialBudgetState,
@@ -535,6 +535,7 @@ export const useBudgetStore = create<BudgetStoreState>()((set, get) => ({
         needsMonthSetup: true,
         error: null,
       });
+      return productImageUris;
     } catch (error) {
       set({ error: toErrorMessage(error) });
       throw error;

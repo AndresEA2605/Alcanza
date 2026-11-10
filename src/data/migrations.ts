@@ -160,12 +160,32 @@ export const MIGRATIONS: readonly Migration[] = [
       }
     },
   },
+  {
+    version: 6,
+    up: async (db) => {
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS business_account (
+          id TEXT PRIMARY KEY NOT NULL,
+          name TEXT NOT NULL
+            CHECK (length(name) > 0 AND length(name) <= 100),
+          type TEXT NOT NULL
+            CHECK (type IN ('cash', 'bank', 'wallet')),
+          amount INTEGER NOT NULL
+            CHECK (typeof(amount) = 'integer' AND amount >= 0),
+          created_at INTEGER NOT NULL
+            CHECK (typeof(created_at) = 'integer'),
+          updated_at INTEGER NOT NULL
+            CHECK (typeof(updated_at) = 'integer')
+        );
+      `);
+    },
+  },
 ];
 
 export const LATEST_DATABASE_VERSION =
   Math.max(
     MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0,
-    5,
+    6,
   );
 
 /**

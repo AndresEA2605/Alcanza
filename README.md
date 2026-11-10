@@ -20,7 +20,8 @@ App de finanzas personales de una sola función: saber **cuánto puedes gastar h
 
 - Node.js **22.13 o superior** (probado con Node 26.13).
 - npm 11 o superior.
-- Para probar en el teléfono: la app **Expo Go** (Android/iOS) o un desarrollo con EAS.
+- Para probar rápidamente: **Expo Go** en iOS o Android. La app muestra un aviso porque Expo Go no cifra la base SQLite.
+- Para cifrado completo de la base: un **development build** nativo con SQLCipher. El proyecto requiere Android Studio/SDK para compilar Android; compilar iOS requiere macOS/Xcode.
 
 ## Arranque
 
@@ -29,9 +30,36 @@ npm install
 npm start
 ```
 
-Escanea el código QR con Expo Go o usa `npm run android` / `npm run ios`.
+Escanea el QR con Expo Go para usar la app. Para cifrado completo, compila e instala el development build con `npx expo run:android` o `npx expo run:ios`; luego inicia Metro con `npm start`.
 
-> Algunas funciones de las fases siguientes (notificaciones, SQLite) pueden requerir un *development build* en lugar de Expo Go. Se indicará en su momento.
+## Descargar en un iPhone
+
+La distribución directa para iPhone usa un build interno firmado Ad Hoc. Requiere una membresía activa de Apple Developer Program y registrar el UDID del teléfono:
+
+1. En este proyecto, ejecuta `npx eas-cli device:create` y elige la cuenta `dreasys-team`.
+2. Abre en Safari del iPhone el enlace de registro que muestra el comando e instala el perfil en **Ajustes** cuando iOS lo solicite.
+3. Vuelve a esta carpeta y ejecuta `npx eas-cli build --platform ios --profile preview`. Cuando se solicite, inicia sesión con Apple y permite que EAS administre la firma.
+4. Al terminar el build, abre el enlace de instalación de EAS desde Safari en el iPhone 11 y pulsa **Install**.
+
+Solo los dispositivos registrados antes de crear el build pueden instalarlo. Mantén privado el enlace de instalación. Sin Apple Developer Program no se puede instalar directamente un IPA Ad Hoc; habría que distribuir mediante App Store Connect/TestFlight, que también requiere esa membresía.
+
+## Primera versión para Android
+
+- `android.package` usa el identificador fijo `com.andresea2605.mealcanza`; no lo cambies después de publicar.
+- `android.versionCode` empieza en `1` y debe incrementarse en cada publicación de Play Store.
+- El perfil `preview` genera un APK instalable directamente para probar en teléfonos Android.
+- El perfil `production` genera un AAB para subir a Google Play Console.
+- Para compilar localmente el APK de release: instala Android Studio con Android SDK, conecta el teléfono con depuración USB y ejecuta `npm run build:android:apk`. Expo genera el proyecto nativo y compila/instala la variante release; el APK queda en `android/app/build/outputs/apk/release/app-release.apk`.
+- Para compilar un AAB de producción, usa el perfil `production` con el flujo de firma de Android configurado en Google Play Console.
+
+## Protección de datos
+
+- En development builds, los datos financieros y del negocio se guardan en SQLite cifrado con SQLCipher; la llave aleatoria se conserva en SecureStore y queda ligada al dispositivo.
+- En Expo Go, SQLCipher no está disponible: la base local queda sin cifrado de base de datos. La app lo informa al abrirse y permite continuar si aceptas esa limitación. No uses Expo Go para información que requiera la protección más alta.
+- Las imágenes de productos se cifran con AES-256-GCM antes de guardarse. Se descifran en memoria para mostrarlas; no se envían a servidores.
+- La primera apertura migra la base de datos existente y las imágenes locales al formato cifrado, verifica la copia y solo después elimina la base antigua.
+- Las copias de seguridad Android están desactivadas. La app solo se publica para iOS y Android; web no está habilitada.
+- En un development build, si falta la llave o el soporte de cifrado, la app se detiene y conserva los archivos existentes. Expo Go tampoco abre una base que ya esté cifrada.
 
 ## Calidad
 
@@ -185,7 +213,7 @@ Además del presupuesto personal, la app incluye un módulo para registrar produ
 2. **Ver ganancias:** la pantalla principal muestra ingreso total, costo total, ganancia libre, cuánto falta para la meta y cuánto queda para reinvertir.
 3. **Cada producto tiene su fila:** muestra el margen de ganancia individual (en verde si es positivo, en rojo si es negativo).
 4. **Editar o eliminar:** toca cualquier producto para modificar sus datos, o elimínalo si ya no lo usas.
-5. **Todo local:** los datos de tu negocio viven en SQLite y las imágenes se guardan en el dispositivo.
+5. **Todo local:** los datos de tu negocio viven en SQLite cifrado y las imágenes se guardan cifradas en el dispositivo.
 
 ### Cálculos
 
@@ -197,4 +225,4 @@ Además del presupuesto personal, la app incluye un módulo para registrar produ
 
 ## Privacidad
 
-Todos los datos viven únicamente en este dispositivo. La app no crea cuentas, no envía información a servidores y funciona en modo avión.
+Todos los datos viven únicamente en este dispositivo. La app no crea cuentas, no envía información a servidores y funciona en modo avión. En development builds la base financiera usa SQLCipher; las imágenes usan AES-256-GCM, las llaves se guardan en SecureStore y Android no permite copias de seguridad de la app. Expo Go está disponible con una advertencia porque no cifra la base SQLite; web no está habilitada.

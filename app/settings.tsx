@@ -1,7 +1,8 @@
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { deleteAllProductImages } from '../src/data/productImageStorage';
 import { useBudgetStore } from '../src/store/useBudgetStore';
 import { useOnboardingStore } from '../src/store/useOnboardingStore';
 import { useSettingsStore } from '../src/store/useSettingsStore';
@@ -11,6 +12,7 @@ import { LoadingState } from '../src/ui/LoadingState';
 import { PrimaryButton } from '../src/ui/PrimaryButton';
 import { Screen } from '../src/ui/Screen';
 import { SettingsRow } from '../src/ui/SettingsRow';
+import { DataResetModal } from '../src/ui/settings/DataResetModal';
 import { useNotifications } from '../src/ui/useNotifications';
 
 export type AppThemeMode = 'system' | 'light' | 'dark';
@@ -45,6 +47,14 @@ export default function SettingsScreen() {
   const resetData = useBudgetStore((state) => state.resetData);
   const setIncome = useOnboardingStore((state) => state.setIncome);
   const setFixed = useOnboardingStore((state) => state.setFixed);
+  const resetOnboarding = useOnboardingStore((state) => state.reset);
+  const [resetModalVisible, setResetModalVisible] = useState(false);
+  const [confirmation, setConfirmation] = useState('');
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [pendingImageUris, setPendingImageUris] = useState<string[] | null>(
+    null,
+  );
   const version = APP_VERSION;
 
   const { status: notificationStatus, timeUntilNext } = useNotifications(
@@ -69,21 +79,47 @@ export default function SettingsScreen() {
     router.push('/onboarding/income');
   }
 
-  async function handleReset() {
-    const confirmed = await new Promise<boolean>((resolve) => {
-      Alert.alert(
-        'Borrar todos los datos',
-        'Esto eliminará ingreso, gastos fijos y gastos registrados. No se puede deshacer.',
-        [
-          { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
-          { text: 'Borrar', style: 'destructive', onPress: () => resolve(true) },
-        ],
-      );
-    });
+  function openResetConfirmation() {
+    setConfirmation('');
+    setResetError(null);
+    setPendingImageUris(null);
+    setResetModalVisible(true);
+  }
 
-    if (confirmed) {
-      await resetData();
+  function closeResetConfirmation() {
+    if (resetting || pendingImageUris !== null) return;
+    setResetModalVisible(false);
+    setConfirmation('');
+    setResetError(null);
+  }
+
+  async function handleReset() {
+    if (confirmation !== 'CONFIRMAR' || resetting) return;
+
+    setResetting(true);
+    setResetError(null);
+    let dataWasReset = pendingImageUris !== null;
+
+    try {
+      const imageUris = pendingImageUris ?? await resetData();
+      dataWasReset = true;
+      resetOnboarding();
+      setPendingImageUris(imageUris);
+      deleteAllProductImages();
+      setPendingImageUris(null);
+      setResetModalVisible(false);
+      setConfirmation('');
       router.replace('/');
+    } catch (error) {
+      setResetError(
+        dataWasReset
+          ? 'Los datos ya se borraron, pero no se pudieron quitar todas las imágenes. Intenta de nuevo para terminar.'
+          : error instanceof Error
+            ? error.message
+            : 'No se pudieron borrar los datos. Intenta de nuevo.',
+      );
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -259,8 +295,8 @@ export default function SettingsScreen() {
         </Text>
         <SettingsRow
           title="Borrar todos los datos"
-          subtitle="Elimina ingreso, gastos fijos y gastos registrados"
-          onPress={handleReset}
+          subtitle="Elimina presupuesto, movimientos y productos"
+          onPress={openResetConfirmation}
           destructive
         />
       </GlassCard>
@@ -292,6 +328,16 @@ export default function SettingsScreen() {
         variant="ghost"
         onPress={() => router.replace('/hoy')}
         style={styles.bottomButton}
+      />
+      <DataResetModal
+        visible={resetModalVisible}
+        confirmation={confirmation}
+        onConfirmationChange={setConfirmation}
+        onClose={closeResetConfirmation}
+        onConfirm={() => void handleReset()}
+        busy={resetting}
+        error={resetError}
+        canRetryCleanup={pendingImageUris !== null}
       />
     </Screen>
   );

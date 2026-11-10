@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 240">
+  <defs>
+    <linearGradient id="icon-background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2788FF"/>
+      <stop offset="1" stop-color="#1046C4"/>
+    </linearGradient>
+    <radialGradient id="icon-glow" cx="0.28" cy="0.18" r="0.9">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g transform="translate(24 20)">
+    <rect width="200" height="200" rx="54" fill="url(#icon-background)"/>
+    <rect width="200" height="200" rx="54" fill="url(#icon-glow)"/>
+    <circle cx="100" cy="100" r="81" fill="none" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="2"/>
+    <path
+      d="M66 70C66 50 82 39 100 39C122 39 135 53 135 72C135 89 125 98 113 106C104 112 101 119 101 128"
+      fill="none"
+      stroke="#FFFFFF"
+      stroke-width="13"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <circle cx="101" cy="147" r="14" fill="#52E0AC"/>
+    <path
+      d="m95 147 4 5 9-10"
+      fill="none"
+      stroke="#FFFFFF"
+      stroke-width="4"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </g>
+  <text
+    x="270"
+    y="150"
+    fill="#13294B"
+    font-family="Aptos, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    font-size="82"
+    font-weight="750"
+    letter-spacing="-3"
+  >¿Me alcanza?</text>
+</svg>

@@ -95,17 +95,54 @@ export async function copyMonthConfig(
   return target;
 }
 
-/** Borra todos los datos locales de la app. */
-export async function clearAllData(db: Database): Promise<void> {
+/** Borra todos los datos financieros y de negocio locales. */
+export async function clearAllData(db: Database): Promise<string[]> {
+  const existingTables = new Set(
+    (
+      await db.getAllAsync<{ name: string }>(
+        `SELECT name
+         FROM sqlite_master
+         WHERE type = 'table'
+           AND name IN (
+             'expense',
+             'income_entry',
+             'month_config',
+             'business_item',
+             'business_account'
+           )`,
+      )
+    ).map(({ name }) => name),
+  );
+  let imageUris: string[] = [];
+
+  if (existingTables.has('business_item')) {
+    const businessItemColumns = await db.getAllAsync<{ name: string }>(
+      'PRAGMA table_info(business_item)',
+    );
+
+    if (businessItemColumns.some(({ name }) => name === 'image_uri')) {
+      const imageRows = await db.getAllAsync<{ image_uri: string | null }>(
+        'SELECT image_uri FROM business_item WHERE image_uri IS NOT NULL',
+      );
+      imageUris = imageRows
+        .map((row) => row.image_uri)
+        .filter((uri): uri is string => uri !== null);
+    }
+  }
+
   await db.withTransactionAsync(async () => {
-    await db.execAsync(`
-      DELETE FROM expense;
-      DELETE FROM month_config;
-    `);
-    try {
-      await db.execAsync(`DELETE FROM income_entry;`);
-    } catch {
-      // Ignorar si la tabla no existe en esquemas antiguos
+    for (const table of [
+      'expense',
+      'income_entry',
+      'month_config',
+      'business_item',
+      'business_account',
+    ]) {
+      if (existingTables.has(table)) {
+        await db.execAsync(`DELETE FROM ${table}`);
+      }
     }
   });
+
+  return imageUris;
 }
