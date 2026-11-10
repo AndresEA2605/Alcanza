@@ -1,0 +1,557 @@
+import { useEffect } from 'react';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+
+import type { BudgetStatus } from '../domain/budget';
+import { formatCOP } from '../domain/money';
+import type { MarginMode, MarginStatus, SpendingMarginResult } from '../domain/spendingMargin';
+import { useTheme } from '../theme';
+import { AnimatedNumber } from './AnimatedNumber';
+import { GlassCard } from './GlassCard';
+import { StatusPill } from './StatusPill';
+
+export interface SpendingMarginBarProps {
+  margin: SpendingMarginResult;
+  onToggleMode?: (mode: MarginMode) => void;
+  style?: StyleProp<ViewStyle>;
+  compact?: boolean;
+  onPressDetail?: () => void;
+}
+
+function toBudgetStatus(status: MarginStatus): BudgetStatus {
+  switch (status) {
+    case 'bien':
+      return 'verde';
+    case 'aviso':
+      return 'naranja';
+    case 'limite':
+      return 'rojo';
+  }
+}
+
+/**
+ * Barra visual del margen de gasto razonable (1% a 100%).
+ *
+ * Muestra el porcentaje proporcional disponible/consumido dividido en tres
+ * zonas: Conservador (verde), Normal (amarillo) y Límite (rojo).
+ * Explica con claridad por qué se puede o no gastar más y qué impacto tiene
+ * en el presupuesto de los días futuros.
+ */
+export function SpendingMarginBar({
+  margin,
+  onToggleMode,
+  style,
+  compact = false,
+  onPressDetail,
+}: SpendingMarginBarProps) {
+  const theme = useTheme();
+  const budgetStatus = toBudgetStatus(margin.status);
+
+  const activeColor = {
+    bien: theme.colors.success,
+    aviso: theme.colors.warning,
+    limite: theme.colors.danger,
+  }[margin.status];
+
+  const progress = useSharedValue(theme.reduceMotion ? margin.percentage : 0);
+
+  useEffect(() => {
+    if (theme.reduceMotion) {
+      progress.value = margin.percentage;
+      return;
+    }
+
+    progress.value = withTiming(margin.percentage, {
+      duration: 650,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [margin.percentage, progress, theme.reduceMotion]);
+
+  const fillAnimatedStyle = useAnimatedStyle(() => ({
+    width: `${progress.value}%`,
+  }));
+
+  const isHoy = margin.mode === 'hoy';
+
+  if (compact) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Margen de gasto de hoy al ${margin.percentage}%. ${margin.headline}. Toca para abrir balance.`}
+        onPress={onPressDetail}
+        style={({ pressed }) => [
+          styles.compactContainer,
+          {
+            backgroundColor: theme.colors.inputBackground,
+            borderColor: theme.colors.separator,
+            opacity: pressed && onPressDetail ? 0.75 : 1,
+          },
+          style,
+        ]}
+      >
+        <View style={styles.compactTopRow}>
+          <View style={styles.compactLeft}>
+            <View style={[styles.compactDot, { backgroundColor: activeColor }]} />
+            <Text style={[styles.compactTitle, { color: theme.colors.text }]}>
+              Margen de hoy: <Text style={{ fontWeight: '800', color: activeColor }}>{margin.percentage}%</Text>
+            </Text>
+            <Text
+              style={[styles.compactHeadline, { color: theme.colors.textSecondary }]}
+              numberOfLines={1}
+            >
+              • {margin.headline}
+            </Text>
+          </View>
+
+          {onPressDetail ? (
+            <View style={styles.compactLinkWrapper}>
+              <Text style={[styles.compactLinkText, { color: theme.colors.accent }]}>
+                Balance ›
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.compactBarTrack}>
+          <View style={styles.trackBackground}>
+            <View style={[styles.segment, { flex: 70, backgroundColor: theme.colors.successSoft }]} />
+            <View style={[styles.segment, { flex: 20, backgroundColor: theme.colors.warningSoft }]} />
+            <View style={[styles.segment, { flex: 10, backgroundColor: theme.colors.dangerSoft }]} />
+          </View>
+          <Animated.View
+            style={[
+              styles.fillBar,
+              { backgroundColor: activeColor },
+              fillAnimatedStyle,
+            ]}
+          />
+        </View>
+      </Pressable>
+    );
+  }
+
+  return (
+    <GlassCard
+      style={style}
+      contentStyle={{ gap: theme.spacing.md }}
+    >
+      {/* Encabezado: Título y StatusPill */}
+      <View style={styles.header}>
+        <View style={styles.titleColumn}>
+          <Text
+            style={[styles.overline, { color: theme.colors.textMuted }]}
+            maxFontSizeMultiplier={1.3}
+          >
+            MARGEN DE GASTO RAZONABLE
+          </Text>
+          <Text
+            accessibilityRole="header"
+            style={[styles.title, { color: theme.colors.text }]}
+            maxFontSizeMultiplier={1.3}
+          >
+            {isHoy ? 'Cuota diaria de hoy' : 'Presupuesto del mes'}
+          </Text>
+        </View>
+
+        <StatusPill status={budgetStatus} />
+      </View>
+
+      {/* Selector de modo opcional (Hoy / Mes) */}
+      {onToggleMode ? (
+        <View
+          style={[
+            styles.modeToggle,
+            { backgroundColor: theme.colors.inputBackground },
+          ]}
+          accessibilityRole="tablist"
+        >
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isHoy }}
+            accessibilityLabel="Margen de hoy"
+            onPress={() => onToggleMode('hoy')}
+            style={[
+              styles.modeButton,
+              isHoy && { backgroundColor: theme.colors.surfaceStrong },
+            ]}
+          >
+            <Text
+              style={[
+                styles.modeButtonText,
+                {
+                  color: isHoy ? theme.colors.text : theme.colors.textMuted,
+                  fontWeight: isHoy ? '700' : '500',
+                },
+              ]}
+            >
+              Hoy (diario)
+            </Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: !isHoy }}
+            accessibilityLabel="Margen del mes"
+            onPress={() => onToggleMode('mes')}
+            style={[
+              styles.modeButton,
+              !isHoy && { backgroundColor: theme.colors.surfaceStrong },
+            ]}
+          >
+            <Text
+              style={[
+                styles.modeButtonText,
+                {
+                  color: !isHoy ? theme.colors.text : theme.colors.textMuted,
+                  fontWeight: !isHoy ? '700' : '500',
+                },
+              ]}
+            >
+              Mes completo
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {/* Métrica principal: Porcentaje consumido */}
+      <View style={styles.metricsRow}>
+        <View style={styles.metricItem}>
+          <Text style={[styles.metricLabel, { color: theme.colors.textSecondary }]}>
+            Consumo del margen
+          </Text>
+          <View style={styles.percentageContainer}>
+            <AnimatedNumber
+              value={margin.percentage}
+              format={(val) => `${Math.round(val)}%`}
+              style={[styles.percentageText, { color: activeColor }]}
+              accessibilityLabel={`Consumo del margen: ${margin.percentage}%`}
+            />
+            {margin.rawPercentage > 100 ? (
+              <Text style={[styles.exceededBadge, { color: theme.colors.danger }]}>
+                +{Math.round(margin.rawPercentage - 100)}% exceso
+              </Text>
+            ) : null}
+          </View>
+        </View>
+
+        <View style={[styles.metricItem, styles.metricRight]}>
+          <Text style={[styles.metricLabel, { color: theme.colors.textSecondary }]}>
+            {isHoy ? 'Queda hoy en margen' : 'Queda en el mes'}
+          </Text>
+          <Text
+            style={[
+              styles.amountRemaining,
+              {
+                color:
+                  margin.remaining <= 0
+                    ? theme.colors.danger
+                    : theme.colors.text,
+              },
+            ]}
+            maxFontSizeMultiplier={1.3}
+          >
+            {formatCOP(Math.max(0, Math.round(margin.remaining)))}
+          </Text>
+          <Text style={[styles.metricSub, { color: theme.colors.textMuted }]}>
+            de {formatCOP(Math.round(margin.limit))} total
+          </Text>
+        </View>
+      </View>
+
+      {/* Barra de progreso con 3 zonas visuales (Conservador / Normal / Límite) */}
+      <View
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityValue={{
+          min: 0,
+          max: 100,
+          now: margin.percentage,
+        }}
+        accessibilityLabel={`Barra de margen de gasto al ${margin.percentage}%. Estado: ${margin.headline}`}
+        style={styles.barWrapper}
+      >
+        <View style={styles.trackBackground}>
+          {/* Segmento Conservador (0 - 70%) */}
+          <View
+            style={[
+              styles.segment,
+              { flex: 70, backgroundColor: theme.colors.successSoft },
+            ]}
+          />
+          {/* Segmento Normal (70 - 90%) */}
+          <View
+            style={[
+              styles.segment,
+              { flex: 20, backgroundColor: theme.colors.warningSoft },
+            ]}
+          />
+          {/* Segmento Límite (90 - 100%) */}
+          <View
+            style={[
+              styles.segment,
+              { flex: 10, backgroundColor: theme.colors.dangerSoft },
+            ]}
+          />
+        </View>
+
+        {/* Relleno animado según porcentaje */}
+        <Animated.View
+          style={[
+            styles.fillBar,
+            { backgroundColor: activeColor },
+            fillAnimatedStyle,
+          ]}
+        />
+      </View>
+
+      {/* Leyenda de zonas (Conservador / Normal / Límite) */}
+      <View style={styles.legendRow}>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: theme.colors.success }]} />
+          <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
+            Conservador (0–70%)
+          </Text>
+        </View>
+
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: theme.colors.warning }]} />
+          <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
+            Normal (70–90%)
+          </Text>
+        </View>
+
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: theme.colors.danger }]} />
+          <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
+            Límite (&gt;90%)
+          </Text>
+        </View>
+      </View>
+
+      {/* Explicación contextual del por qué */}
+      <View
+        style={[
+          styles.explanationCard,
+          {
+            backgroundColor: theme.colors.inputBackground,
+            borderColor: theme.colors.separator,
+          },
+        ]}
+      >
+        <Text
+          style={[styles.explanationHeadline, { color: activeColor }]}
+          maxFontSizeMultiplier={1.3}
+        >
+          {margin.headline}
+        </Text>
+        <Text
+          style={[styles.explanationText, { color: theme.colors.textSecondary }]}
+          maxFontSizeMultiplier={1.3}
+        >
+          {margin.explanation}
+        </Text>
+      </View>
+    </GlassCard>
+  );
+}
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  titleColumn: {
+    flex: 1,
+    gap: 2,
+  },
+  overline: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 24,
+  },
+  modeToggle: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    padding: 3,
+    gap: 4,
+  },
+  modeButton: {
+    flex: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modeButtonText: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingVertical: 4,
+  },
+  metricItem: {
+    gap: 4,
+  },
+  metricRight: {
+    alignItems: 'flex-end',
+  },
+  metricLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  percentageContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  percentageText: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '800',
+  },
+  exceededBadge: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  amountRemaining: {
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '700',
+  },
+  metricSub: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  barWrapper: {
+    height: 12,
+    borderRadius: 6,
+    overflow: 'hidden',
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  trackBackground: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    flexDirection: 'row',
+  },
+  segment: {
+    height: '100%',
+  },
+  fillBar: {
+    height: '100%',
+    borderRadius: 6,
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: -2,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  legendDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  legendText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  explanationCard: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 4,
+  },
+  explanationHeadline: {
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
+  explanationText: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  compactContainer: {
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 8,
+    width: '100%',
+  },
+  compactTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  compactLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  compactDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  compactTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  compactHeadline: {
+    fontSize: 12,
+    flexShrink: 1,
+  },
+  compactLinkWrapper: {
+    paddingLeft: 4,
+  },
+  compactLinkText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  compactBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+    position: 'relative',
+    width: '100%',
+  },
+});
