@@ -83,8 +83,6 @@ function ThemedApp() {
         <Stack.Screen name="balance" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="settings" />
         <Stack.Screen name="negocio" />
-        <Stack.Screen name="negocio/nuevo" />
-        <Stack.Screen name="negocio/editar" />
       </Stack>
     </>
   );

@@ -7,6 +7,15 @@
  */
 
 export type BusinessType = 'product' | 'service';
+export type BusinessGoalPeriod = 'daily' | 'monthly' | 'yearly';
+
+export function normalizeBusinessGoal(
+  amount: number,
+  period: BusinessGoalPeriod,
+): number {
+  const days = period === 'daily' ? 1 : period === 'monthly' ? 30 : 365;
+  return Math.round(amount / days);
+}
 
 export interface BusinessItem {
   /** Identificador local del producto o servicio. */
@@ -23,6 +32,14 @@ export interface BusinessItem {
   investment: number;
   /** Meta de ganancia diaria en COP. */
   dailyGoal: number;
+  /** Monto de la meta configurada en su periodo. */
+  goalAmount: number;
+  /** Periodo de la meta configurada. */
+  goalPeriod: BusinessGoalPeriod;
+  /** Descripción opcional del producto o servicio. */
+  description: string;
+  /** URI local opcional de la imagen. */
+  imageUri: string | null;
   /** Fecha de creación como epoch en milisegundos. */
   createdAt: number;
   /** Fecha de última actualización como epoch en milisegundos. */
@@ -36,6 +53,10 @@ export interface NewBusinessItem {
   pricePerUnit: number;
   investment?: number;
   dailyGoal: number;
+  goalAmount?: number;
+  goalPeriod?: BusinessGoalPeriod;
+  description?: string;
+  imageUri?: string | null;
 }
 
 export interface BusinessCalculation {

@@ -1,5 +1,5 @@
 import { Redirect, router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Pressable,
   RefreshControl,
@@ -17,7 +17,6 @@ import {
   calcTodayFromState,
   useBudgetStore,
 } from '../src/store/useBudgetStore';
-import { useOnboardingStore } from '../src/store/useOnboardingStore';
 import { useTheme } from '../src/theme';
 import { AnimatedNumber } from '../src/ui/AnimatedNumber';
 import { EmptyState } from '../src/ui/EmptyState';
@@ -27,6 +26,7 @@ import { FadeInView } from '../src/ui/FadeInView';
 import { FloatingActionButton } from '../src/ui/FloatingActionButton';
 import { GlassCard } from '../src/ui/GlassCard';
 import { IncomeItem } from '../src/ui/IncomeItem';
+import { LoadingState } from '../src/ui/LoadingState';
 import { PrimaryButton } from '../src/ui/PrimaryButton';
 import { SpendingMarginBar } from '../src/ui/SpendingMarginBar';
 import { SuccessBanner } from '../src/ui/SuccessBanner';
@@ -49,12 +49,13 @@ export default function TodayScreen() {
   const deleteIncome = useBudgetStore((state) => state.deleteIncome);
   const undoDelete = useBudgetStore((state) => state.undoDelete);
   const undoDeleteIncome = useBudgetStore((state) => state.undoDeleteIncome);
-  const setIncome = useOnboardingStore((state) => state.setIncome);
-  const setFixed = useOnboardingStore((state) => state.setFixed);
   const marginMode = useBudgetStore((state) => state.marginMode);
+  const budgetStatus = useBudgetStore((state) => state.status);
+  const budgetError = useBudgetStore((state) => state.error);
+  const initializeBudget = useBudgetStore((state) => state.initialize);
 
   const [sheetVisible, setSheetVisible] = useState(false);
-  const [sheetMode, setSheetMode] = useState<SheetMode>('gasto');
+  const [sheetMode, setSheetMode] = useState<SheetMode | null>(null);
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('comida');
   const [saving, setSaving] = useState(false);
@@ -64,11 +65,32 @@ export default function TodayScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [now] = useState(Date.now);
 
+  useEffect(() => {
+    if (budgetStatus === 'idle') {
+      void initializeBudget();
+    }
+  }, [budgetStatus, initializeBudget]);
+
   const today = calcTodayFromState({ config, expenses, incomes }, now);
   const spendingMargin = calcSpendingMarginFromState(
     { config, expenses, incomes, marginMode },
     now,
   );
+
+  if (budgetStatus === 'idle' || budgetStatus === 'loading') {
+    return <LoadingState key={budgetStatus} title="Cargando tu presupuesto…" />;
+  }
+
+  if (budgetStatus === 'error') {
+    return (
+      <LoadingState
+        key={budgetStatus}
+        title="Cargando tu presupuesto…"
+        error={budgetError}
+        onRetry={() => void initializeBudget()}
+      />
+    );
+  }
 
   if (!config || !today) {
     return <Redirect href="/onboarding/welcome" />;
@@ -149,17 +171,10 @@ export default function TodayScreen() {
     setUndoIncomeVisible(false);
   }
 
-  function openSheet(mode: SheetMode) {
+  function openSheet(mode: SheetMode | null = null) {
     setSheetMode(mode);
     setAmount('');
     setSheetVisible(true);
-  }
-
-  function editAmounts() {
-    if (!config) return;
-    setIncome(config.income);
-    setFixed(config.fixed);
-    router.push('/onboarding/income');
   }
 
   async function handleRefresh() {
@@ -268,72 +283,79 @@ export default function TodayScreen() {
             </GlassCard>
           </FadeInView>
 
-          {/* Acciones directas y accesibles (menos pasos para adultos mayores) */}
+          {/* Acceso único para registrar un movimiento */}
           <FadeInView delay={130}>
-            <View style={styles.quickActionsRow}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Registrar un gasto nuevo"
-                onPress={() => openSheet('gasto')}
-                style={[
-                  styles.quickActionButton,
-                  {
-                    backgroundColor: theme.colors.inputBackground,
-                    borderColor: theme.colors.separator,
-                  },
-                ]}
-              >
-                <Text style={styles.quickActionEmoji}>💸</Text>
-                <View style={styles.quickActionTextGroup}>
-                  <Text
-                    style={[styles.quickActionTitle, { color: theme.colors.text }]}
-                  >
-                    Registrar gasto
-                  </Text>
-                  <Text
-                    style={[
-                      styles.quickActionSubtitle,
-                      { color: theme.colors.textMuted },
-                    ]}
-                  >
-                    Resta de tu día
-                  </Text>
-                </View>
-              </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Registrar un movimiento"
+              onPress={() => openSheet()}
+              style={[
+                styles.quickActionButton,
+                {
+                  backgroundColor: theme.colors.inputBackground,
+                  borderColor: theme.colors.separator,
+                },
+              ]}
+            >
+              <View style={styles.quickActionTextGroup}>
+                <Text
+                  style={[styles.quickActionTitle, { color: theme.colors.text }]}
+                >
+                  Registrar movimiento
+                </Text>
+                <Text
+                  style={[
+                    styles.quickActionSubtitle,
+                    { color: theme.colors.textMuted },
+                  ]}
+                >
+                  Elige gasto o ingreso
+                </Text>
+              </View>
+              <Text style={[styles.quickActionArrow, { color: theme.colors.textMuted }]}>
+                →
+              </Text>
+            </Pressable>
+          </FadeInView>
 
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Registrar un ingreso adicional"
-                onPress={() => openSheet('ingreso')}
+          <FadeInView delay={150}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Abrir Mi negocio"
+              accessibilityHint="Ver productos, ventas y metas de tu negocio"
+              onPress={() => router.push('/negocio' as any)}
+              style={({ pressed }) => [
+                styles.businessCard,
+                {
+                  backgroundColor: theme.colors.accentSoft,
+                  borderColor: theme.colors.accent,
+                  transform: [{ scale: pressed ? 0.99 : 1 }],
+                },
+              ]}
+            >
+              <View style={styles.businessCardContent}>
+                <Text
+                  style={[styles.businessTitle, { color: theme.colors.text }]}
+                >
+                  Mi negocio
+                </Text>
+              </View>
+              <View
                 style={[
-                  styles.quickActionButton,
-                  {
-                    backgroundColor: theme.colors.successSoft,
-                    borderColor: theme.colors.success,
-                  },
+                  styles.businessArrowWrap,
+                  { backgroundColor: theme.colors.accent },
                 ]}
               >
-                <Text style={styles.quickActionEmoji}>💰</Text>
-                <View style={styles.quickActionTextGroup}>
-                  <Text
-                    style={[
-                      styles.quickActionTitle,
-                      { color: theme.colors.success },
-                    ]}
-                  >
-                    Registrar ingreso
-                  </Text>
-                  <Text
-                    style={[
-                      styles.quickActionSubtitle,
-                      { color: theme.colors.textMuted },
-                    ]}
-                  >
-                    Suma a tu cuota
-                  </Text>
-                </View>
-              </Pressable>
-            </View>
+                <Text
+                  style={[
+                    styles.businessArrow,
+                    { color: theme.colors.onAccent },
+                  ]}
+                >
+                  →
+                </Text>
+              </View>
+            </Pressable>
           </FadeInView>
 
           {/* Tarjeta de Disponible hoy después de gastos si ya se gastó algo */}
@@ -376,8 +398,7 @@ export default function TodayScreen() {
               {!hasActivityToday ? (
                 <EmptyState
                   title="Sin movimientos hoy"
-                  subtitle="Toca 'Registrar gasto' o 'Registrar ingreso' para anotar tu actividad del día."
-                  emoji="📋"
+                  subtitle="Tus gastos e ingresos aparecerán aquí."
                 />
               ) : (
                 <>
@@ -436,34 +457,73 @@ export default function TodayScreen() {
             </GlassCard>
           </FadeInView>
 
+          <FadeInView delay={320}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Ver balance y margen"
+              accessibilityHint="Consultar tu proyección mensual y simular gastos"
+              onPress={() => router.push('/balance')}
+              style={({ pressed }) => [
+                styles.balanceCard,
+                {
+                  backgroundColor: theme.colors.accent,
+                  borderColor: theme.colors.accent,
+                  transform: [{ scale: pressed ? 0.99 : 1 }],
+                },
+              ]}
+            >
+              <View style={styles.balanceCardContent}>
+                <Text
+                  style={[
+                    styles.balanceCardTitle,
+                    { color: theme.colors.onAccent },
+                  ]}
+                >
+                  Balance y margen
+                </Text>
+                <Text
+                  style={[
+                    styles.balanceCardSubtitle,
+                    { color: theme.colors.onAccent },
+                  ]}
+                >
+                  Proyección mensual y simulador
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.balanceArrowWrap,
+                  { backgroundColor: theme.colors.surface },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.balanceArrow,
+                    { color: theme.colors.accent },
+                  ]}
+                >
+                  →
+                </Text>
+              </View>
+            </Pressable>
+          </FadeInView>
+
           {/* Accesos secundarios */}
           <FadeInView delay={340} style={styles.footer}>
-            <PrimaryButton
-              label="Ver balance y análisis del margen"
-              variant="secondary"
-              onPress={() => router.push('/balance')}
-            />
-            <PrimaryButton
-              label="Ajustar ingreso base y fijos"
-              variant="ghost"
-              onPress={editAmounts}
-            />
             <PrimaryButton
               label="Ajustes"
               variant="ghost"
               onPress={() => router.push('/settings')}
-            />
-            <PrimaryButton
-              label="Mi negocio"
-              variant="ghost"
-              onPress={() => router.push('/negocio' as any)}
             />
           </FadeInView>
         </ScrollView>
       </SafeAreaView>
 
       {/* Botón flotante accesible */}
-      <FloatingActionButton onPress={() => openSheet('gasto')} />
+      <FloatingActionButton
+        accessibilityLabel="Registrar un movimiento"
+        onPress={() => openSheet()}
+      />
 
       {/* Hoja unificada para registrar gastos o ingresos */}
       <ExpenseSheet
@@ -619,36 +679,100 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 20,
   },
-  quickActionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
   quickActionButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    borderRadius: 18,
     borderWidth: 1,
-    gap: 10,
-    minHeight: 56,
-  },
-  quickActionEmoji: {
-    fontSize: 26,
-    lineHeight: 30,
+    gap: 16,
+    minHeight: 72,
   },
   quickActionTextGroup: {
     flex: 1,
+    gap: 2,
   },
   quickActionTitle: {
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 17,
+    lineHeight: 22,
     fontWeight: '700',
   },
   quickActionSubtitle: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 14,
+    lineHeight: 19,
+  },
+  quickActionArrow: {
+    fontSize: 24,
+    lineHeight: 28,
+    fontWeight: '500',
+  },
+  businessCard: {
+    minHeight: 88,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 18,
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 16,
+  },
+  businessCardContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  businessTitle: {
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '800',
+  },
+  businessArrowWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  businessArrow: {
+    fontSize: 24,
+    lineHeight: 28,
+    fontWeight: '600',
+  },
+  balanceCard: {
+    minHeight: 92,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 18,
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 16,
+  },
+  balanceCardContent: {
+    flex: 1,
+    gap: 4,
+  },
+  balanceCardTitle: {
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '800',
+  },
+  balanceCardSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    opacity: 0.88,
+  },
+  balanceArrowWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  balanceArrow: {
+    fontSize: 23,
+    lineHeight: 27,
+    fontWeight: '600',
   },
   smallLabel: {
     fontSize: 13,

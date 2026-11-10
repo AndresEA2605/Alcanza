@@ -1,10 +1,13 @@
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { useEffect } from 'react';
 
 import { useBudgetStore } from '../src/store/useBudgetStore';
+import { useOnboardingStore } from '../src/store/useOnboardingStore';
 import { useSettingsStore } from '../src/store/useSettingsStore';
 import { useTheme } from '../src/theme';
 import { GlassCard } from '../src/ui/GlassCard';
+import { LoadingState } from '../src/ui/LoadingState';
 import { PrimaryButton } from '../src/ui/PrimaryButton';
 import { Screen } from '../src/ui/Screen';
 import { SettingsRow } from '../src/ui/SettingsRow';
@@ -35,7 +38,13 @@ export default function SettingsScreen() {
     (state) => state.setNotificationsEnabled,
   );
   const notificationTime = useSettingsStore((state) => state.notificationTime);
+  const config = useBudgetStore((state) => state.config);
+  const budgetStatus = useBudgetStore((state) => state.status);
+  const budgetError = useBudgetStore((state) => state.error);
+  const initializeBudget = useBudgetStore((state) => state.initialize);
   const resetData = useBudgetStore((state) => state.resetData);
+  const setIncome = useOnboardingStore((state) => state.setIncome);
+  const setFixed = useOnboardingStore((state) => state.setFixed);
   const version = APP_VERSION;
 
   const { status: notificationStatus, timeUntilNext } = useNotifications(
@@ -43,8 +52,21 @@ export default function SettingsScreen() {
     notificationTime,
   );
 
+  useEffect(() => {
+    if (budgetStatus === 'idle') {
+      void initializeBudget();
+    }
+  }, [budgetStatus, initializeBudget]);
+
   function selectTheme(mode: AppThemeMode) {
     setThemeMode(mode);
+  }
+
+  function editBudgetAmounts() {
+    if (!config) return;
+    setIncome(config.income);
+    setFixed(config.fixed);
+    router.push('/onboarding/income');
   }
 
   async function handleReset() {
@@ -65,6 +87,21 @@ export default function SettingsScreen() {
     }
   }
 
+  if (budgetStatus === 'idle' || budgetStatus === 'loading') {
+    return <LoadingState key={budgetStatus} title="Cargando ajustes…" />;
+  }
+
+  if (budgetStatus === 'error') {
+    return (
+      <LoadingState
+        key={budgetStatus}
+        title="Cargando ajustes…"
+        error={budgetError}
+        onRetry={() => void initializeBudget()}
+      />
+    );
+  }
+
   return (
     <Screen contentStyle={styles.content}>
       <View style={styles.header}>
@@ -80,6 +117,17 @@ export default function SettingsScreen() {
       </View>
 
       <GlassCard contentStyle={styles.card}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+          Presupuesto
+        </Text>
+        <SettingsRow
+          title="Ingreso base y gastos fijos"
+          subtitle="Actualiza tus montos mensuales"
+          onPress={editBudgetAmounts}
+        />
+      </GlassCard>
+
+      <GlassCard contentStyle={styles.card} style={styles.cardMargin}>
         <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
           Apariencia
         </Text>

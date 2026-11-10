@@ -125,12 +125,47 @@ export const MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 5,
+    up: async (db) => {
+      const columns = await db.getAllAsync<{ name: string }>(
+        'PRAGMA table_info(business_item)',
+      );
+      const existing = new Set(columns.map((column) => column.name));
+
+      if (!existing.has('description')) {
+        await db.execAsync(
+          "ALTER TABLE business_item ADD COLUMN description TEXT NOT NULL DEFAULT ''",
+        );
+      }
+      if (!existing.has('image_uri')) {
+        await db.execAsync(
+          'ALTER TABLE business_item ADD COLUMN image_uri TEXT NULL',
+        );
+      }
+      if (!existing.has('goal_period')) {
+        await db.execAsync(
+          "ALTER TABLE business_item ADD COLUMN goal_period TEXT NOT NULL DEFAULT 'daily' CHECK (goal_period IN ('daily', 'monthly', 'yearly'))",
+        );
+      }
+      if (!existing.has('goal_amount')) {
+        await db.execAsync(
+          'ALTER TABLE business_item ADD COLUMN goal_amount INTEGER NOT NULL DEFAULT 0 CHECK (typeof(goal_amount) = \'integer\' AND goal_amount >= 0)',
+        );
+        if (existing.has('daily_goal')) {
+          await db.execAsync(
+            'UPDATE business_item SET goal_amount = daily_goal',
+          );
+        }
+      }
+    },
+  },
 ];
 
 export const LATEST_DATABASE_VERSION =
   Math.max(
     MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0,
-    4,
+    5,
   );
 
 /**
@@ -192,11 +227,15 @@ async function migrateBusinessItemSchema(db: Database): Promise<void> {
     );
     const currentVersion = row?.user_version ?? 0;
 
-    // Si ya tiene el esquema nuevo y user_version es al menos 3, no hacer nada
+    // Si ya tiene el esquema actual, no hacer nada.
     if (
       existing.has('price_per_unit') &&
       existing.has('type') &&
-      currentVersion >= 3
+      existing.has('description') &&
+      existing.has('image_uri') &&
+      existing.has('goal_period') &&
+      existing.has('goal_amount') &&
+      currentVersion >= 5
     ) {
       return;
     }
@@ -213,6 +252,10 @@ async function migrateBusinessItemSchema(db: Database): Promise<void> {
         price_per_unit INTEGER NOT NULL DEFAULT 0 CHECK (typeof(price_per_unit) = 'integer' AND price_per_unit >= 0),
         investment INTEGER NOT NULL DEFAULT 0 CHECK (typeof(investment) = 'integer' AND investment >= 0),
         daily_goal INTEGER NOT NULL DEFAULT 0 CHECK (typeof(daily_goal) = 'integer' AND daily_goal >= 0),
+        description TEXT NOT NULL DEFAULT '',
+        image_uri TEXT NULL,
+        goal_period TEXT NOT NULL DEFAULT 'daily' CHECK (goal_period IN ('daily', 'monthly', 'yearly')),
+        goal_amount INTEGER NOT NULL DEFAULT 0 CHECK (typeof(goal_amount) = 'integer' AND goal_amount >= 0),
         created_at INTEGER NOT NULL DEFAULT 0,
         updated_at INTEGER NOT NULL DEFAULT 0
       );

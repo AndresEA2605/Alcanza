@@ -1,14 +1,7 @@
 import { Redirect } from 'expo-router';
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-} from 'react-native';
 
 import { useBudgetStore } from '../src/store/useBudgetStore';
-import { useTheme } from '../src/theme';
-import { PrimaryButton } from '../src/ui/PrimaryButton';
-import { Screen } from '../src/ui/Screen';
+import { LoadingState } from '../src/ui/LoadingState';
 
 /**
  * Puerta de entrada: espera a que el estado local cargue y decide si la
@@ -19,73 +12,23 @@ export default function IndexScreen() {
   const needsMonthSetup = useBudgetStore((state) => state.needsMonthSetup);
   const error = useBudgetStore((state) => state.error);
   const initialize = useBudgetStore((state) => state.initialize);
-  const theme = useTheme();
 
   if (status === 'error') {
     return (
-      <Screen scroll={false} contentStyle={styles.centered}>
-        <Text
-          accessibilityRole="header"
-          style={[styles.brand, { color: theme.colors.text }]}
-        >
-          ¿Me alcanza?
-        </Text>
-        <Text style={[styles.message, { color: theme.colors.textSecondary }]}>
-          {error ?? 'No pude abrir tus datos locales.'}
-        </Text>
-        <PrimaryButton
-          label="Intentar de nuevo"
-          onPress={() => {
-            void initialize();
-          }}
-          style={styles.retry}
-        />
-      </Screen>
+      <LoadingState
+        key={status}
+        title="Preparando la app…"
+        error={error ?? 'No pude abrir tus datos locales.'}
+        onRetry={() => void initialize()}
+      />
     );
   }
 
   if (status !== 'ready') {
-    return (
-      <Screen scroll={false} contentStyle={styles.centered}>
-        <Text
-          accessibilityRole="header"
-          style={[styles.brand, { color: theme.colors.text }]}
-        >
-          ¿Me alcanza?
-        </Text>
-        <ActivityIndicator color={theme.colors.accent} />
-        <Text style={[styles.message, { color: theme.colors.textMuted }]}>
-          Abriendo tus datos…
-        </Text>
-      </Screen>
-    );
+    return <LoadingState key={status} title="Abriendo tus datos…" />;
   }
 
   return (
     <Redirect href={needsMonthSetup ? '/onboarding/welcome' : '/hoy'} />
   );
 }
-
-const styles = StyleSheet.create({
-  centered: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 18,
-  },
-  brand: {
-    fontSize: 38,
-    lineHeight: 44,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  message: {
-    fontSize: 17,
-    lineHeight: 24,
-    textAlign: 'center',
-    maxWidth: 320,
-  },
-  retry: {
-    minWidth: 220,
-    marginTop: 8,
-  },
-});

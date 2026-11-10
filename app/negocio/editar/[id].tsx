@@ -1,6 +1,7 @@
-import { useRouter } from 'expo-router';
-import { useState, useRef } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState, useRef } from 'react';
 import {
+  Image,
   Alert,
   Platform,
   Pressable,
@@ -15,10 +16,15 @@ import { useTheme } from '../../../src/theme';
 import { BackButton } from '../../../src/ui/BackButton';
 import { FadeInView } from '../../../src/ui/FadeInView';
 import { GlassCard } from '../../../src/ui/GlassCard';
+import { LoadingState } from '../../../src/ui/LoadingState';
 import { MoneyInput } from '../../../src/ui/MoneyInput';
 import { PrimaryButton } from '../../../src/ui/PrimaryButton';
 import { Screen } from '../../../src/ui/Screen';
-import { BusinessItem } from '../../../src/domain/business';
+import {
+  normalizeBusinessGoal,
+  type BusinessGoalPeriod,
+  type BusinessItem,
+} from '../../../src/domain/business';
 
 type BusinessFormType = 'product' | 'service';
 
@@ -28,19 +34,38 @@ type BusinessFormType = 'product' | 'service';
 export default function EditarNegocioScreen() {
   const theme = useTheme();
   const s = styles(theme);
-  const router = useRouter() as {
-    params?: { id?: string };
-    canGoBack: () => boolean;
-    replace: (href: string) => void;
-    back: () => void;
-  };
-  const itemId = router.params?.id;
+  const router = useRouter();
+  const { id: itemId } = useLocalSearchParams<{ id: string }>();
   const error = useBusinessStore((state) => state.error);
+  const status = useBusinessStore((state) => state.status);
+  const initialize = useBusinessStore((state) => state.initialize);
+  const refresh = useBusinessStore((state) => state.refresh);
+
+  useEffect(() => {
+    if (status === 'idle') {
+      void initialize();
+    }
+  }, [initialize, status]);
 
   // Buscar el ítem en el estado
   const item = useBusinessStore((state) =>
     state.items.find((i: BusinessItem) => i.id === itemId),
   );
+
+  if (status === 'idle' || status === 'loading') {
+    return <LoadingState key={status} title="Cargando producto…" />;
+  }
+
+  if (status === 'error' && !item) {
+    return (
+      <LoadingState
+        key={status}
+        title="Cargando producto…"
+        error={error}
+        onRetry={() => void refresh()}
+      />
+    );
+  }
 
   if (!item || !itemId) {
     return (
@@ -50,7 +75,7 @@ export default function EditarNegocioScreen() {
         </Text>
         <PrimaryButton
           label="Volver"
-          onPress={() => router.replace('/negocio' as any)}
+          onPress={() => router.replace('/negocio')}
         />
       </Screen>
     );
@@ -75,18 +100,16 @@ function EditForm({
 }) {
   const updateItem = useBusinessStore((state) => state.updateItem);
   const deleteItem = useBusinessStore((state) => state.deleteItem);
-  const router = useRouter() as {
-    canGoBack: () => boolean;
-    replace: (href: string) => void;
-    back: () => void;
-  };
+  const router = useRouter();
 
   const [type, setType] = useState<BusinessFormType>(item.type);
   const [name, setName] = useState(item.name);
+  const [description, setDescription] = useState(item.description);
   const [quantity, setQuantity] = useState(item.quantity);
   const [pricePerUnit, setPricePerUnit] = useState(item.pricePerUnit);
   const [investment, setInvestment] = useState(item.investment);
-  const [dailyGoal, setDailyGoal] = useState(item.dailyGoal);
+  const [goalAmount, setGoalAmount] = useState(item.goalAmount);
+  const [goalPeriod, setGoalPeriod] = useState<BusinessGoalPeriod>(item.goalPeriod);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorState] = useState<string | null>(null);
 
@@ -94,13 +117,14 @@ function EditForm({
   const quantityRef = useRef<number>(item.quantity);
   const priceRef = useRef<number>(item.pricePerUnit);
   const investmentRef = useRef<number>(item.investment);
-  const dailyGoalRef = useRef<number>(item.dailyGoal);
+  const goalAmountRef = useRef<number>(item.goalAmount);
+  const goalPeriodRef = useRef<BusinessGoalPeriod>(item.goalPeriod);
 
   function goBack() {
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/negocio' as any);
+      router.replace('/negocio');
     }
   }
 
@@ -124,13 +148,19 @@ function EditForm({
     try {
       await updateItem(itemId, {
         name: name.trim(),
+        description: description.trim(),
         type,
         quantity: quantityRef.current,
         pricePerUnit: priceRef.current,
         investment: type === 'product' ? investmentRef.current : 0,
-        dailyGoal: dailyGoalRef.current,
+        dailyGoal: normalizeBusinessGoal(
+          goalAmountRef.current,
+          goalPeriodRef.current,
+        ),
+        goalAmount: goalAmountRef.current,
+        goalPeriod: goalPeriodRef.current,
       });
-      router.replace('/negocio' as any);
+      router.replace('/negocio');
     } catch {
       // El store ya establece el error.
     } finally {
@@ -180,6 +210,14 @@ function EditForm({
           </Text>
         </FadeInView>
 
+        {item.imageUri ? (
+          <Image
+            source={{ uri: item.imageUri }}
+            style={s.editImage}
+            accessibilityLabel={`Imagen de ${item.name}`}
+          />
+        ) : null}
+
         <FadeInView delay={140}>
           <View style={s.typeSelector}>
             <TypeChip
@@ -217,6 +255,23 @@ function EditForm({
                   placeholderTextColor={theme.colors.textMuted}
                   autoCapitalize="words"
                   autoFocus
+                />
+              </View>
+            </View>
+
+            <View style={s.fieldGroup}>
+              <Text style={[s.fieldLabel, { color: theme.colors.textSecondary }]}>
+                Descripción
+              </Text>
+              <View style={s.inputContainer}>
+                <TextInput
+                  style={[s.input, s.descriptionInput, { color: theme.colors.text }]}
+                  value={description}
+                  onChangeText={setDescription}
+                  placeholder="Detalles del producto o servicio"
+                  placeholderTextColor={theme.colors.textMuted}
+                  multiline
+                  maxLength={500}
                 />
               </View>
             </View>
@@ -298,16 +353,60 @@ function EditForm({
 
             <View style={s.fieldGroup}>
               <Text style={[s.fieldLabel, { color: theme.colors.textSecondary }]}>
-                Meta de ganancia diaria (COP)
+                Meta de ganancia neta
               </Text>
+              <View style={s.goalPeriodRow}>
+                {([
+                  ['daily', 'Diaria'],
+                  ['monthly', 'Mensual'],
+                  ['yearly', 'Anual'],
+                ] as const).map(([period, label]) => {
+                  const selected = goalPeriod === period;
+                  return (
+                    <Pressable
+                      key={period}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
+                      onPress={() => {
+                        setGoalPeriod(period);
+                        goalPeriodRef.current = period;
+                      }}
+                      style={[
+                        s.goalPeriodButton,
+                        {
+                          backgroundColor: selected
+                            ? theme.colors.accent
+                            : theme.colors.inputBackground,
+                          borderColor: selected
+                            ? theme.colors.accent
+                            : theme.colors.separator,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          s.goalPeriodLabel,
+                          {
+                            color: selected
+                              ? theme.colors.onAccent
+                              : theme.colors.text,
+                          },
+                        ]}
+                      >
+                        {label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
               <View style={s.inputContainer}>
                 <MoneyInput
-                  value={dailyGoal}
+                  value={goalAmount}
                   onChange={(v) => {
-                    setDailyGoal(v);
-                    dailyGoalRef.current = v;
+                    setGoalAmount(v);
+                    goalAmountRef.current = v;
                   }}
-                  accessibilityLabel="Meta diaria"
+                  accessibilityLabel={`Meta de ganancia ${goalPeriod}`}
                 />
               </View>
             </View>
@@ -427,9 +526,20 @@ function styles(theme: ReturnType<typeof useTheme>) {
       fontWeight: '800',
       letterSpacing: -0.5,
     },
+    subtitle: {
+      fontSize: 14,
+      lineHeight: 20,
+      textAlign: 'center',
+    },
     typeSelector: {
       flexDirection: 'row',
       gap: 10,
+    },
+    editImage: {
+      width: 96,
+      height: 96,
+      borderRadius: 18,
+      backgroundColor: theme.colors.inputBackground,
     },
     typeChip: {
       flex: 1,
@@ -464,6 +574,26 @@ function styles(theme: ReturnType<typeof useTheme>) {
     input: {
       fontSize: 20,
       lineHeight: 26,
+    },
+    descriptionInput: {
+      minHeight: 92,
+      textAlignVertical: 'top',
+    },
+    goalPeriodRow: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    goalPeriodButton: {
+      flex: 1,
+      minHeight: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 12,
+      borderWidth: 1,
+    },
+    goalPeriodLabel: {
+      fontSize: 14,
+      fontWeight: '600',
     },
     bottom: {
       gap: 4,

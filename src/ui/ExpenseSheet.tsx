@@ -8,13 +8,15 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Category } from '../domain/budget';
 import { formatCOP, parseCOPInput } from '../domain/money';
 import { useBudgetStore, verifyExpenseFromState } from '../store/useBudgetStore';
 import { useTheme } from '../theme';
+import { MovementTypeSelector, type SheetMode } from './MovementTypeSelector';
 
-export type SheetMode = 'gasto' | 'ingreso';
+export type { SheetMode } from './MovementTypeSelector';
 
 interface ExpenseSheetProps {
   visible: boolean;
@@ -27,14 +29,14 @@ interface ExpenseSheetProps {
   category: string;
   onCategoryChange: (category: string) => void;
   saving: boolean;
-  initialMode?: SheetMode;
+  initialMode?: SheetMode | null;
 }
 
 /**
  * Hoja unificada para registrar tanto gastos como ingresos adicionales.
  *
  * Diseñada para máxima simplicidad y accesibilidad (personas mayores o con vista cansada):
- * - Selección intuitiva de Gasto / Ingreso con pestañas de alto contraste (mínimo 48dp).
+ * - Selección explícita de Gasto / Ingreso antes de introducir el monto.
  * - Tipografía amplia y legible (18-42px).
  * - Verificación en tiempo real del margen razonable para gastos.
  * - Registro directo de ingresos que suman inmediatamente al dinero disponible.
@@ -50,14 +52,14 @@ export function ExpenseSheet({
   category,
   onCategoryChange,
   saving,
-  initialMode = 'gasto',
+  initialMode = null,
 }: ExpenseSheetProps) {
   const theme = useTheme();
   const config = useBudgetStore((state) => state.config);
   const expenses = useBudgetStore((state) => state.expenses);
   const incomes = useBudgetStore((state) => state.incomes);
 
-  const [mode, setMode] = useState<SheetMode>(initialMode);
+  const [mode, setMode] = useState<SheetMode | null>(initialMode);
   const [description, setDescription] = useState('');
   const [confirmOverMargin, setConfirmOverMargin] = useState(false);
   const [prevVisible, setPrevVisible] = useState(visible);
@@ -99,7 +101,7 @@ export function ExpenseSheet({
 
   function handleAttemptSave() {
     const digits = amount.replace(/\D/g, '');
-    if (!digits || saving) {
+    if (!mode || !digits || saving) {
       return;
     }
 
@@ -133,6 +135,7 @@ export function ExpenseSheet({
   }
 
   const isSaveDisabled =
+    !mode ||
     !amount.replace(/\D/g, '') ||
     saving ||
     (mode === 'gasto' && verification?.hardBlocked === true);
@@ -145,7 +148,10 @@ export function ExpenseSheet({
       animationType="fade"
       hardwareAccelerated
     >
-      <View style={[styles.container, { backgroundColor: theme.colors.scrim }]}>
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.scrim }]}
+        edges={['top', 'left', 'right']}
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Cerrar hoja de registro"
@@ -153,131 +159,102 @@ export function ExpenseSheet({
           style={StyleSheet.absoluteFill}
         />
         <View style={[styles.sheet, { backgroundColor: theme.colors.surface }]}>
-          <View style={styles.handle} />
+          <View
+            style={[
+              styles.titleBar,
+              { borderBottomColor: theme.colors.separator },
+            ]}
+          >
+            <View style={styles.titleGroup}>
+              <Text
+                style={[styles.eyebrow, { color: theme.colors.textMuted }]}
+              >
+                MOVIMIENTOS
+              </Text>
+              <Text
+                accessibilityRole="header"
+                style={[styles.sheetTitle, { color: theme.colors.text }]}
+              >
+                Nuevo registro
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cerrar registro"
+              hitSlop={8}
+              onPress={handleClose}
+              style={[
+                styles.closeButton,
+                {
+                  backgroundColor: theme.colors.inputBackground,
+                  borderColor: theme.colors.separator,
+                },
+              ]}
+            >
+              <Text style={[styles.closeLabel, { color: theme.colors.text }]}>
+                ×
+              </Text>
+            </Pressable>
+          </View>
+          <View style={styles.selectorSection}>
+            <MovementTypeSelector
+              mode={mode}
+              onChange={(nextMode) => {
+                setMode(nextMode);
+                setConfirmOverMargin(false);
+              }}
+            />
+          </View>
+
           <ScrollView
+            style={styles.form}
             bounces={false}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.body}
           >
-            {/* Selector de Modo: Gasto vs Ingreso */}
-            <View
-              style={[
-                styles.tabContainer,
-                { backgroundColor: theme.colors.inputBackground },
-              ]}
-              accessibilityRole="radiogroup"
-              accessibilityLabel="Tipo de registro: gasto o ingreso"
-            >
-              <Pressable
-                accessibilityRole="radio"
-                accessibilityState={{ checked: mode === 'gasto' }}
-                accessibilityLabel="Registrar un gasto"
-                onPress={() => {
-                  setMode('gasto');
-                  setConfirmOverMargin(false);
-                }}
-                style={[
-                  styles.tabButton,
-                  mode === 'gasto' && {
-                    backgroundColor: theme.colors.accent,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.tabText,
-                    {
-                      color:
-                        mode === 'gasto'
-                          ? '#ffffff'
-                          : theme.colors.textSecondary,
-                      fontWeight: mode === 'gasto' ? '700' : '600',
-                    },
-                  ]}
-                  maxFontSizeMultiplier={1.3}
-                >
-                  💸 Gasto
-                </Text>
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="radio"
-                accessibilityState={{ checked: mode === 'ingreso' }}
-                accessibilityLabel="Registrar un ingreso"
-                onPress={() => {
-                  setMode('ingreso');
-                  setConfirmOverMargin(false);
-                }}
-                style={[
-                  styles.tabButton,
-                  mode === 'ingreso' && {
-                    backgroundColor: theme.colors.success,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.tabText,
-                    {
-                      color:
-                        mode === 'ingreso'
-                          ? '#ffffff'
-                          : theme.colors.textSecondary,
-                      fontWeight: mode === 'ingreso' ? '700' : '600',
-                    },
-                  ]}
-                  maxFontSizeMultiplier={1.3}
-                >
-                  💰 Ingreso
-                </Text>
-              </Pressable>
-            </View>
-
-            {/* Título claro */}
-            <Text
-              style={[styles.title, { color: theme.colors.text }]}
-              maxFontSizeMultiplier={1.4}
-            >
-              {mode === 'gasto' ? 'Registrar gasto' : 'Registrar ingreso adicional'}
-            </Text>
-
             {/* Input del monto */}
-            <View style={styles.row}>
-              <Text
-                style={[
-                  styles.currency,
-                  {
-                    color:
-                      mode === 'ingreso'
-                        ? theme.colors.success
-                        : theme.colors.textSecondary,
-                  },
-                ]}
-              >
-                $
-              </Text>
-              <TextInput
-                style={[styles.input, { color: theme.colors.text }]}
-                maxFontSizeMultiplier={1.3}
-                value={amount}
-                onChangeText={(text) => {
-                  setConfirmOverMargin(false);
-                  onAmountChange(text);
-                }}
-                placeholder="0"
-                placeholderTextColor={theme.colors.textMuted}
-                keyboardType="number-pad"
-                inputMode="numeric"
-                autoFocus
-                accessibilityLabel={`Monto del ${mode} en pesos colombianos`}
-              />
-              <Text
-                style={[styles.unit, { color: theme.colors.textMuted }]}
-                maxFontSizeMultiplier={1.3}
-              >
-                COP
-              </Text>
-            </View>
+            {mode !== null ? (
+              <View style={styles.amountSection}>
+                <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+                  Monto del {mode}
+                </Text>
+                <View style={styles.row}>
+                  <Text
+                    style={[
+                      styles.currency,
+                      {
+                        color:
+                          mode === 'ingreso'
+                            ? theme.colors.success
+                            : theme.colors.textSecondary,
+                      },
+                    ]}
+                  >
+                    $
+                  </Text>
+                  <TextInput
+                    style={[styles.input, { color: theme.colors.text }]}
+                    maxFontSizeMultiplier={1.3}
+                    value={amount}
+                    onChangeText={(text) => {
+                      setConfirmOverMargin(false);
+                      onAmountChange(text);
+                    }}
+                    placeholder="0"
+                    placeholderTextColor={theme.colors.textMuted}
+                    keyboardType="number-pad"
+                    inputMode="numeric"
+                    accessibilityLabel={`Monto del ${mode} en pesos colombianos`}
+                  />
+                  <Text
+                    style={[styles.unit, { color: theme.colors.textMuted }]}
+                    maxFontSizeMultiplier={1.3}
+                  >
+                    COP
+                  </Text>
+                </View>
+              </View>
+            ) : null}
 
             {/* Banner reactivo de verificación del margen (Modo Gasto) */}
             {mode === 'gasto' && verification ? (
@@ -314,41 +291,12 @@ export function ExpenseSheet({
                     },
                   ]}
                 >
-                  {verification.hardBlocked
-                    ? '🛑 '
-                    : verification.canProceedWithWarning
-                      ? '⚠️ '
-                      : '✓ '}
                   {verification.title}
                 </Text>
                 <Text
                   style={[styles.verificationMessage, { color: theme.colors.text }]}
                 >
                   {verification.message}
-                </Text>
-              </View>
-            ) : null}
-
-            {/* Información orientativa en modo Ingreso */}
-            {mode === 'ingreso' ? (
-              <View
-                style={[
-                  styles.infoBox,
-                  {
-                    backgroundColor: theme.colors.successSoft,
-                    borderColor: theme.colors.success,
-                  },
-                ]}
-              >
-                <Text
-                  style={[styles.infoTitle, { color: theme.colors.success }]}
-                >
-                  ✨ ¿Qué pasa al guardar un ingreso?
-                </Text>
-                <Text
-                  style={[styles.infoMessage, { color: theme.colors.text }]}
-                >
-                  Este dinero se suma de inmediato a tu disponible mensual y aumenta la cuota diaria que puedes gastar hoy y los días siguientes.
                 </Text>
               </View>
             ) : null}
@@ -363,10 +311,10 @@ export function ExpenseSheet({
                 </Text>
                 <View style={styles.chips}>
                   {[
-                    { id: 'comida', label: '🍽️ Comida' },
-                    { id: 'transporte', label: '🚌 Transporte' },
-                    { id: 'ocio', label: '🎉 Ocio' },
-                    { id: 'otros', label: '🛒 Otros' },
+                    { id: 'comida', label: 'Comida' },
+                    { id: 'transporte', label: 'Transporte' },
+                    { id: 'ocio', label: 'Ocio' },
+                    { id: 'otros', label: 'Otros' },
                   ].map((item) => (
                     <Pressable
                       key={item.id}
@@ -405,8 +353,9 @@ export function ExpenseSheet({
                   ))}
                 </View>
               </View>
-            ) : (
-              /* Campo de descripción en modo Ingreso */
+            ) : null}
+
+            {mode === 'ingreso' ? (
               <View style={styles.descriptionRow}>
                 <Text
                   style={[styles.subtitle, { color: theme.colors.textSecondary }]}
@@ -430,7 +379,7 @@ export function ExpenseSheet({
                   accessibilityLabel="Descripción del ingreso"
                 />
               </View>
-            )}
+            ) : null}
 
             {/* Confirmación explícita si supera el margen diario (Modo Gasto) */}
             {mode === 'gasto' &&
@@ -448,7 +397,7 @@ export function ExpenseSheet({
                 <Text
                   style={[styles.confirmTitle, { color: theme.colors.warning }]}
                 >
-                  ⚠️ El gasto supera tu cuota de hoy
+                  El gasto supera tu cuota de hoy
                 </Text>
                 <Text
                   style={[styles.confirmText, { color: theme.colors.text }]}
@@ -510,7 +459,11 @@ export function ExpenseSheet({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={
-                  mode === 'gasto' ? 'Guardar gasto' : 'Guardar ingreso'
+                  mode === 'gasto'
+                    ? 'Guardar gasto'
+                    : mode === 'ingreso'
+                      ? 'Guardar ingreso'
+                      : 'Selecciona un tipo de movimiento'
                 }
                 disabled={isSaveDisabled}
                 onPress={handleAttemptSave}
@@ -540,13 +493,15 @@ export function ExpenseSheet({
                     ? 'Guardando...'
                     : mode === 'gasto'
                       ? 'Guardar gasto'
-                      : 'Guardar ingreso'}
+                      : mode === 'ingreso'
+                        ? 'Guardar ingreso'
+                        : 'Selecciona un tipo'}
                 </Text>
               </Pressable>
             ) : null}
           </ScrollView>
         </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }
@@ -554,49 +509,74 @@ export function ExpenseSheet({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   sheet: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    flexShrink: 1,
+    maxHeight: '94%',
+    borderRadius: 24,
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 36,
-    maxHeight: '90%',
+    paddingTop: 8,
+    paddingBottom: 12,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 20,
+    elevation: 12,
   },
-  handle: {
-    alignSelf: 'center',
-    width: 44,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: '#88888844',
-    marginBottom: 16,
-  },
-  body: {
-    gap: 18,
-    paddingBottom: 20,
-  },
-  tabContainer: {
+  titleBar: {
+    minHeight: 76,
     flexDirection: 'row',
-    borderRadius: 16,
-    padding: 4,
-    gap: 4,
-  },
-  tabButton: {
-    flex: 1,
-    minHeight: 48,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
+    justifyContent: 'space-between',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingBottom: 12,
+    gap: 12,
   },
-  tabText: {
-    fontSize: 16,
-    lineHeight: 22,
+  titleGroup: {
+    flex: 1,
+    gap: 2,
   },
-  title: {
+  eyebrow: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  sheetTitle: {
     fontSize: 22,
     lineHeight: 28,
     fontWeight: '700',
+  },
+  closeButton: {
+    width: 42,
+    height: 42,
+    borderWidth: 1,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeLabel: {
+    fontSize: 28,
+    lineHeight: 30,
+    fontWeight: '400',
+  },
+  selectorSection: {
+    paddingTop: 16,
+  },
+  form: {
+    flexShrink: 1,
+    minHeight: 0,
+  },
+  body: {
+    gap: 18,
+    paddingTop: 20,
+    paddingBottom: 20,
+  },
+  amountSection: {
+    gap: 6,
   },
   row: {
     flexDirection: 'row',
@@ -631,21 +611,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   verificationMessage: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  infoBox: {
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    gap: 4,
-  },
-  infoTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    lineHeight: 18,
-  },
-  infoMessage: {
     fontSize: 13,
     lineHeight: 18,
   },

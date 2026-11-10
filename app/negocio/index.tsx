@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Image,
   Platform,
   Pressable,
   SafeAreaView,
@@ -21,6 +22,7 @@ import { EmptyState } from '../../src/ui/EmptyState';
 import { FadeInView } from '../../src/ui/FadeInView';
 import { FloatingActionButton } from '../../src/ui/FloatingActionButton';
 import { GlassCard } from '../../src/ui/GlassCard';
+import { LoadingState } from '../../src/ui/LoadingState';
 import { PrimaryButton } from '../../src/ui/PrimaryButton';
 
 type FilterType = 'all' | 'product' | 'service';
@@ -50,6 +52,10 @@ export default function NegocioIndexScreen() {
     if (activeFilter === 'service') return item.type === 'service';
     return true;
   });
+  const calculationById = useMemo(
+    () => new Map(items.map((item, index) => [item.id, calculations[index]])),
+    [calculations, items],
+  );
 
   const totalDailyGoal = items.reduce((acc, i) => acc + (i.dailyGoal || 0), 0);
 
@@ -84,32 +90,18 @@ export default function NegocioIndexScreen() {
     }
   }
 
-  if (status !== 'ready') {
-    return (
-      <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
-        <SafeAreaView style={styles.safe}>
-          <View style={styles.centered}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>Mi negocio</Text>
-            <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-              Cargando tu información…
-            </Text>
-          </View>
-        </SafeAreaView>
-      </View>
-    );
+  if (status === 'idle' || status === 'loading') {
+    return <LoadingState key={status} title="Cargando tu negocio…" />;
   }
 
-  if (error) {
+  if (status === 'error') {
     return (
-      <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
-        <SafeAreaView style={styles.safe}>
-          <View style={styles.centered}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>Mi negocio</Text>
-            <Text style={[styles.message, { color: theme.colors.textSecondary }]}>{error}</Text>
-            <PrimaryButton label="Intentar de nuevo" onPress={refresh} style={styles.retry} />
-          </View>
-        </SafeAreaView>
-      </View>
+      <LoadingState
+        key={status}
+        title="Cargando tu negocio…"
+        error={error}
+        onRetry={() => void refresh()}
+      />
     );
   }
 
@@ -397,14 +389,11 @@ export default function NegocioIndexScreen() {
               ) : (
                 <View style={styles.itemsContainer}>
                   {filteredItems.map((item) => {
-                    const originalIndex = items.findIndex((i) => i.id === item.id);
-                    const calc = calculations[originalIndex];
-
                     return (
                       <BusinessItemCard
                         key={item.id}
                         item={item}
-                        calculation={calc}
+                        calculation={calculationById.get(item.id)}
                         onEdit={() => {
                           router.push({
                             pathname: '/negocio/editar/[id]',
@@ -498,13 +487,31 @@ function BusinessItemCard({
         </View>
       </View>
 
-      {/* Nombre principal */}
-      <Text
-        style={[styles.itemName, { color: theme.colors.text }]}
-        maxFontSizeMultiplier={1.3}
-      >
-        {item.name}
-      </Text>
+      <View style={styles.itemIdentity}>
+        {item.imageUri ? (
+          <Image
+            source={{ uri: item.imageUri }}
+            style={styles.itemImage}
+            accessibilityLabel={`Imagen de ${item.name}`}
+          />
+        ) : null}
+        <View style={styles.itemTitleGroup}>
+          <Text
+            style={[styles.itemName, { color: theme.colors.text }]}
+            maxFontSizeMultiplier={1.3}
+          >
+            {item.name}
+          </Text>
+          {item.description ? (
+            <Text
+              style={[styles.itemDescription, { color: theme.colors.textSecondary }]}
+              numberOfLines={3}
+            >
+              {item.description}
+            </Text>
+          ) : null}
+        </View>
+      </View>
 
       {/* Grid de indicadores claros y espaciosos */}
       <View style={styles.detailsGrid}>
@@ -557,8 +564,8 @@ function BusinessItemCard({
         </View>
       </View>
 
-      {/* Meta diaria si aplica */}
-      {item.dailyGoal > 0 ? (
+      {/* Meta del periodo configurado */}
+      {item.goalAmount > 0 ? (
         <View
           style={[
             styles.itemGoalBox,
@@ -569,7 +576,10 @@ function BusinessItemCard({
           ]}
         >
           <Text style={[styles.itemGoalText, { color: theme.colors.textSecondary }]}>
-            Meta diaria: <Text style={{ fontWeight: '700', color: theme.colors.text }}>{formatCOP(Math.round(item.dailyGoal))}</Text>
+            Meta {item.goalPeriod === 'daily' ? 'diaria' : item.goalPeriod === 'monthly' ? 'mensual' : 'anual'}:{' '}
+            <Text style={{ fontWeight: '700', color: theme.colors.text }}>
+              {formatCOP(Math.round(item.goalAmount))}
+            </Text>
           </Text>
           {calculation?.goalReached ? (
             <Text style={[styles.itemGoalAchieved, { color: theme.colors.success }]}>
@@ -804,6 +814,25 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     fontWeight: '800',
     letterSpacing: -0.3,
+  },
+  itemIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  itemImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 14,
+    backgroundColor: '#80808022',
+  },
+  itemTitleGroup: {
+    flex: 1,
+    gap: 3,
+  },
+  itemDescription: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   detailsGrid: {
     flexDirection: 'row',

@@ -6,27 +6,8 @@ import { monthLabel } from '../../src/domain/labels';
 import { useBudgetStore } from '../../src/store/useBudgetStore';
 import { useTheme } from '../../src/theme';
 import { FadeInView } from '../../src/ui/FadeInView';
-import { GlassCard } from '../../src/ui/GlassCard';
 import { PrimaryButton } from '../../src/ui/PrimaryButton';
 import { Screen } from '../../src/ui/Screen';
-
-const FEATURES = [
-  {
-    emoji: '🎯',
-    title: 'Un número para hoy',
-    detail: 'Te dice cuánto puedes gastar sin arruinar el resto del mes.',
-  },
-  {
-    emoji: '📶',
-    title: 'Funciona sin internet',
-    detail: 'Todo se calcula en tu teléfono, incluso en modo avión.',
-  },
-  {
-    emoji: '🔒',
-    title: 'Sin cuentas ni servidores',
-    detail: 'Tus datos no salen de este dispositivo.',
-  },
-] as const;
 
 export default function WelcomeScreen() {
   const theme = useTheme();
@@ -94,35 +75,8 @@ export default function WelcomeScreen() {
               { color: theme.colors.textSecondary, marginTop: theme.spacing.md },
             ]}
           >
-            Tu número diario para gastar sin arruinar el mes.
+            Presupuesto diario · Gastos · Ingresos · Negocio
           </Text>
-        </FadeInView>
-
-        <FadeInView delay={240} style={{ marginTop: theme.spacing.xxl }}>
-          <GlassCard contentStyle={{ gap: theme.spacing.lg }}>
-            {FEATURES.map((feature) => (
-              <View key={feature.title} style={styles.feature}>
-                <Text style={styles.emoji} maxFontSizeMultiplier={1.2}>
-                  {feature.emoji}
-                </Text>
-                <View style={styles.featureText}>
-                  <Text
-                    style={[styles.featureTitle, { color: theme.colors.text }]}
-                  >
-                    {feature.title}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.featureDetail,
-                      { color: theme.colors.textSecondary },
-                    ]}
-                  >
-                    {feature.detail}
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </GlassCard>
         </FadeInView>
       </View>
 
@@ -188,31 +142,10 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
   },
   tagline: {
-    fontSize: 19,
-    lineHeight: 26,
+    fontSize: 17,
+    lineHeight: 25,
     maxWidth: 320,
-  },
-  feature: {
-    flexDirection: 'row',
-    gap: 14,
-    alignItems: 'flex-start',
-  },
-  emoji: {
-    fontSize: 24,
-    lineHeight: 30,
-  },
-  featureText: {
-    flex: 1,
-    gap: 2,
-  },
-  featureTitle: {
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: '700',
-  },
-  featureDetail: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontWeight: '600',
   },
   bottom: {
     gap: 12,

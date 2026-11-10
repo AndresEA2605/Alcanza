@@ -14,7 +14,7 @@ App de finanzas personales de una sola función: saber **cuánto puedes gastar h
 - **Margen de gasto razonable (nuevo):** barra horizontal del 1 al 100 % dividida en secciones (Conservador, Normal, Límite), sistema de verificación fuerte de gastos en dominio puro y advertencia/bloqueo interactivo al registrar gastos.
 - **Registro de ingresos adicionales (nuevo):** registro de dineros que ingresan durante el mes (trabajos extra, ventas, bonos) que se suman al presupuesto del mes y recalculan automáticamente el disponible diario y del mes.
 - **UX/UI simplificada y accesible (nuevo):** botones de acceso rápido directos, hoja unificada para gastos e ingresos, tipografía más grande, contrastes optimizados y soporte para personas mayores.
-- **Módulo de negocio (nuevo):** pantallas para registrar productos o servicios, calcular ganancias y metas diarias.
+- **Módulo de negocio (nuevo):** asistente de tres pasos para productos y servicios, con imagen opcional, datos económicos y metas de ganancia diarias, mensuales o anuales.
 
 ## Requisitos
 
@@ -181,18 +181,18 @@ Además del presupuesto personal, la app incluye un módulo para registrar produ
 
 ### Cómo funciona
 
-1. **Agregar un producto o servicio:** desde Hoy o Ajustes, toca "Mi negocio" → "+ Nuevo". Ingresa el nombre, precio de venta, costo por unidad, cantidad que vendes/realizas al día y tu meta de ganancia diaria.
+1. **Agregar un producto o servicio:** desde Mi negocio, toca "+ Nuevo". El asistente pide nombre y descripción, una imagen opcional y luego los datos económicos: cantidad estimada al día, precio por unidad, inversión del lote y una meta opcional de ganancia neta diaria, mensual o anual.
 2. **Ver ganancias:** la pantalla principal muestra ingreso total, costo total, ganancia libre, cuánto falta para la meta y cuánto queda para reinvertir.
 3. **Cada producto tiene su fila:** muestra el margen de ganancia individual (en verde si es positivo, en rojo si es negativo).
 4. **Editar o eliminar:** toca cualquier producto para modificar sus datos, o elimínalo si ya no lo usas.
-5. **Todo local:** los datos de tu negocio viven en SQLite en tu teléfono, igual que el presupuesto personal.
+5. **Todo local:** los datos de tu negocio viven en SQLite y las imágenes se guardan en el dispositivo.
 
 ### Cálculos
 
 - **Ingreso:** precio de venta × cantidad
-- **Costo:** costo por unidad × cantidad
+- **Costo:** inversión total del lote
 - **Ganancia libre:** ingreso − costo (si es negativo, se muestra en rojo)
-- **Meta diaria:** cuánto falta para llegar a tu objetivo del día
+- **Meta:** se puede configurar por día, mes o año; para el cálculo diario se normaliza entre 1, 30 o 365 días respectivamente
 - **Reinversión:** lo que queda de tu ganancia libre para seguir invirtiendo en el negocio
 
 ## Privacidad

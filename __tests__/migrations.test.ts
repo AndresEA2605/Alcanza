@@ -1,5 +1,6 @@
 import {
   LATEST_DATABASE_VERSION,
+  MIGRATIONS,
   migrateDatabase,
 } from '../src/data/migrations';
 import {
@@ -31,6 +32,18 @@ describe('migraciones de la base de datos', () => {
 
     expect(await userVersion()).toBe(LATEST_DATABASE_VERSION);
 
+    const businessColumns = await testDb.db.getAllAsync<{ name: string }>(
+      `PRAGMA table_info(business_item)`,
+    );
+    expect(businessColumns.map((column) => column.name)).toEqual(
+      expect.arrayContaining([
+        'description',
+        'image_uri',
+        'goal_period',
+        'goal_amount',
+      ]),
+    );
+
     const tables = await testDb.db.getAllAsync<{ name: string }>(
       `SELECT name
        FROM sqlite_master
@@ -59,6 +72,49 @@ describe('migraciones de la base de datos', () => {
     await migrateDatabase(testDb.db);
 
     expect(await userVersion()).toBe(LATEST_DATABASE_VERSION);
+  });
+
+  it('conserva las metas existentes como metas diarias al migrar el negocio', async () => {
+    for (const migration of MIGRATIONS.filter(({ version }) => version <= 4)) {
+      await migration.up(testDb.db);
+      await testDb.db.execAsync(`PRAGMA user_version = ${migration.version}`);
+    }
+
+    await testDb.db.runAsync(
+      `INSERT INTO business_item
+       (id, name, type, quantity, price_per_unit, investment, daily_goal, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      'old-product',
+      'Producto anterior',
+      'product',
+      2,
+      1000,
+      500,
+      25000,
+      1,
+      1,
+    );
+
+    await migrateDatabase(testDb.db);
+    const migrated = await testDb.db.getFirstAsync<{
+      daily_goal: number;
+      goal_amount: number;
+      goal_period: string;
+      description: string;
+      image_uri: string | null;
+    }>(
+      `SELECT daily_goal, goal_amount, goal_period, description, image_uri
+       FROM business_item WHERE id = ?`,
+      'old-product',
+    );
+
+    expect(migrated).toEqual({
+      daily_goal: 25000,
+      goal_amount: 25000,
+      goal_period: 'daily',
+      description: '',
+      image_uri: null,
+    });
   });
 
   it('rechaza una base de datos más nueva que la app', async () => {

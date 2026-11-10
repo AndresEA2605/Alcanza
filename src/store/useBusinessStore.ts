@@ -68,6 +68,8 @@ export const useBusinessStore = create<BusinessStoreState>()((set, get) => ({
   },
 
   refresh: async () => {
+    set({ status: 'loading', error: null });
+
     try {
       const db = await getDatabase();
       const items = await listBusinessItems(db);
@@ -87,6 +89,7 @@ export const useBusinessStore = create<BusinessStoreState>()((set, get) => ({
       await refreshItems(set, db);
     } catch (error) {
       set({
+        status: 'error',
         error: error instanceof Error ? error.message : 'Error inesperado.',
       });
       throw error;

@@ -1,6 +1,10 @@
+import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
+  ActivityIndicator,
+  Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,44 +14,78 @@ import {
 } from 'react-native';
 
 import {
-  calculateBusiness,
+  normalizeBusinessGoal,
+  type BusinessGoalPeriod,
   type BusinessType,
 } from '../../src/domain/business';
+import { persistProductImage } from '../../src/data/productImageStorage';
 import { formatCOP } from '../../src/domain/money';
 import { useBusinessStore } from '../../src/store/useBusinessStore';
 import { useTheme } from '../../src/theme';
 import { BackButton } from '../../src/ui/BackButton';
-import { FadeInView } from '../../src/ui/FadeInView';
 import { GlassCard } from '../../src/ui/GlassCard';
 import { MoneyInput } from '../../src/ui/MoneyInput';
 import { PrimaryButton } from '../../src/ui/PrimaryButton';
 import { Screen } from '../../src/ui/Screen';
+import { StepIndicator } from '../../src/ui/StepIndicator';
+
+const STEPS = [
+  { title: 'Cuéntanos qué vendes', subtitle: 'Empecemos con lo básico.' },
+  { title: 'Agrega una imagen', subtitle: 'Una foto ayuda a reconocerlo rápido.' },
+  {
+    title: 'Precio de venta',
+    subtitle: 'Define el precio de este producto o servicio.',
+  },
+  {
+    title: 'Registra tu inversión',
+    subtitle: 'Anota cuánto te cuesta producir o comprar una unidad.',
+  },
+  {
+    title: 'Define tu meta',
+    subtitle: 'Si quieres, establece una meta de ganancia.',
+  },
+] as const;
+
+const GOAL_PERIODS: readonly {
+  id: BusinessGoalPeriod;
+  label: string;
+}[] = [
+  { id: 'daily', label: 'Diaria' },
+  { id: 'monthly', label: 'Mensual' },
+  { id: 'yearly', label: 'Anual' },
+];
 
 export default function NuevoNegocioScreen() {
   const theme = useTheme();
   const addItem = useBusinessStore((state) => state.addItem);
 
+  const [step, setStep] = useState(1);
   const [type, setType] = useState<BusinessType>('product');
   const [name, setName] = useState('');
-  const [quantity, setQuantity] = useState(1);
+  const [description, setDescription] = useState('');
+  const [imageUri, setImageUri] = useState<string | null>(null);
   const [pricePerUnit, setPricePerUnit] = useState(0);
   const [investment, setInvestment] = useState(0);
-  const [dailyGoal, setDailyGoal] = useState(0);
-
+  const [goalAmount, setGoalAmount] = useState(0);
+  const [goalPeriod, setGoalPeriod] = useState<BusinessGoalPeriod>('daily');
   const [saving, setSaving] = useState(false);
-  const [errorMessage, setErrorState] = useState<string | null>(null);
+  const [loadingImage, setLoadingImage] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const calculation = useMemo(() => {
-    return calculateBusiness({
-      type,
-      quantity: Math.max(1, quantity),
-      pricePerUnit,
-      investment: type === 'product' ? investment : 0,
-      dailyGoal,
-    });
-  }, [type, quantity, pricePerUnit, investment, dailyGoal]);
-
+  const isProduct = type === 'product';
+  const financialStep = step === 3 ? 1 : isProduct ? step - 2 : 2;
+  const progressStep = step > 3 && !isProduct ? step - 1 : step;
+  const dailyGoal = normalizeBusinessGoal(goalAmount, goalPeriod);
   function goBack() {
+    if (step > 1) {
+      setStep((current) => {
+        if (current === 5 && !isProduct) return 3;
+        return current - 1;
+      });
+      setErrorMessage(null);
+      return;
+    }
+
     if (router.canGoBack()) {
       router.back();
     } else {
@@ -55,390 +93,470 @@ export default function NuevoNegocioScreen() {
     }
   }
 
-  async function handleSave() {
-    if (saving) return;
+  function continueToNextStep() {
+    setErrorMessage(null);
 
-    if (!name.trim()) {
-      setErrorState('El nombre del producto o servicio es obligatorio.');
+    if (step === 1 && !name.trim()) {
+      setErrorMessage('Escribe el nombre para continuar.');
       return;
     }
 
-    if (quantity <= 0) {
-      setErrorState('La cantidad diaria debe ser mayor que 0.');
+    if (step === 3) {
+      if (pricePerUnit <= 0) {
+        setErrorMessage('Agrega un precio de venta por unidad.');
+        return;
+      }
+    }
+
+    if (step === 5) {
+      void saveItem();
       return;
     }
 
-    if (pricePerUnit <= 0) {
-      setErrorState('El precio de venta debe ser mayor que 0.');
+    setStep((current) => (current === 3 && !isProduct ? 5 : current + 1));
+  }
+
+  async function pickImage() {
+    setLoadingImage(true);
+    setErrorMessage(null);
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.75,
+        base64: Platform.OS === 'web',
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      if (Platform.OS === 'web') {
+        if (!asset.base64) {
+          throw new Error('No pude leer la imagen. Prueba con otra foto.');
+        }
+        setImageUri(`data:${asset.mimeType ?? 'image/jpeg'};base64,${asset.base64}`);
+      } else {
+        setImageUri(asset.uri);
+      }
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'No pude abrir tus fotos. Intenta de nuevo.',
+      );
+    } finally {
+      setLoadingImage(false);
+    }
+  }
+
+  async function saveItem() {
+    if (saving) {
       return;
     }
 
     setSaving(true);
-    setErrorState(null);
-
+    setErrorMessage(null);
     try {
+      const savedImageUri = await persistProductImage(imageUri);
       await addItem({
         name: name.trim(),
+        description: description.trim(),
+        imageUri: savedImageUri,
         type,
-        quantity,
+        quantity: 1,
         pricePerUnit,
-        investment: type === 'product' ? investment : 0,
+        investment: isProduct ? investment : 0,
         dailyGoal,
+        goalAmount,
+        goalPeriod,
       });
       router.replace('/negocio');
-    } catch (err) {
-      setErrorState(
-        err instanceof Error
-          ? err.message
-          : 'No pude guardar el producto o servicio. Intenta de nuevo.',
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'No pude guardar el producto. Intenta de nuevo.',
       );
     } finally {
       setSaving(false);
     }
   }
 
-  const isProduct = type === 'product';
+  const stepContent = [
+    <GlassCard key="details" contentStyle={styles.cardContent}>
+      <View
+        style={[
+          styles.typeSelector,
+          { backgroundColor: theme.colors.inputBackground },
+        ]}
+      >
+        {(['product', 'service'] as const).map((value) => {
+          const selected = type === value;
+          return (
+            <Pressable
+              key={value}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
+              onPress={() => setType(value)}
+              style={[
+                styles.typeOption,
+                selected && { backgroundColor: theme.colors.surface },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.typeOptionText,
+                  {
+                    color: selected
+                      ? theme.colors.text
+                      : theme.colors.textSecondary,
+                    fontWeight: selected ? '700' : '500',
+                  },
+                ]}
+              >
+                {value === 'product' ? 'Producto' : 'Servicio'}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <Field label="Nombre" theme={theme}>
+        <TextInput
+          style={[
+            styles.textInput,
+            {
+              color: theme.colors.text,
+              borderColor: theme.colors.separator,
+              backgroundColor: theme.colors.inputBackground,
+            },
+          ]}
+          value={name}
+          onChangeText={setName}
+          placeholder={isProduct ? 'Ej. Café molido' : 'Ej. Asesoría'}
+          placeholderTextColor={theme.colors.textMuted}
+          autoCapitalize="sentences"
+          maxLength={100}
+          returnKeyType="next"
+        />
+      </Field>
+
+      <Field label="Descripción (opcional)" theme={theme}>
+        <TextInput
+          style={[
+            styles.textInput,
+            styles.descriptionInput,
+            {
+              color: theme.colors.text,
+              borderColor: theme.colors.separator,
+              backgroundColor: theme.colors.inputBackground,
+            },
+          ]}
+          value={description}
+          onChangeText={setDescription}
+          placeholder="Detalles que quieras recordar"
+          placeholderTextColor={theme.colors.textMuted}
+          autoCapitalize="sentences"
+          multiline
+          maxLength={500}
+        />
+      </Field>
+    </GlassCard>,
+
+    <GlassCard key="image" contentStyle={styles.imageCard}>
+      {imageUri ? (
+        <Image source={{ uri: imageUri }} style={styles.productImage} />
+      ) : (
+        <View
+          style={[
+            styles.imagePlaceholder,
+            {
+              backgroundColor: theme.colors.inputBackground,
+              borderColor: theme.colors.separator,
+            },
+          ]}
+        >
+          <Text style={[styles.imagePlaceholderTitle, { color: theme.colors.text }]}>
+            Sin imagen
+          </Text>
+          <Text style={[styles.imagePlaceholderHint, { color: theme.colors.textMuted }]}>
+            Puedes agregar una foto desde tu dispositivo.
+          </Text>
+        </View>
+      )}
+      <PrimaryButton
+        label={loadingImage ? 'Abriendo fotos…' : imageUri ? 'Cambiar imagen' : 'Elegir imagen'}
+        variant="secondary"
+        loading={loadingImage}
+        disabled={loadingImage}
+        onPress={() => void pickImage()}
+      />
+      {imageUri ? (
+        <PrimaryButton
+          label="Quitar imagen"
+          variant="ghost"
+          disabled={loadingImage}
+          onPress={() => setImageUri(null)}
+        />
+      ) : null}
+      <Text style={[styles.optionalNote, { color: theme.colors.textMuted }]}>
+        Este paso es opcional. Puedes continuar sin una foto.
+      </Text>
+    </GlassCard>,
+
+    <GlassCard key="price" contentStyle={styles.cardContent}>
+      <Field
+        label={isProduct ? 'Precio de venta del producto' : 'Precio por servicio'}
+        theme={theme}
+      >
+        <MoneyInput
+          value={pricePerUnit}
+          onChange={setPricePerUnit}
+          accessibilityLabel="Precio de venta en pesos colombianos"
+        />
+      </Field>
+    </GlassCard>,
+
+    <GlassCard key="investment" contentStyle={styles.cardContent}>
+      {isProduct ? (
+        <>
+          <Text
+            style={[
+              styles.stepIntro,
+              { color: theme.colors.textSecondary },
+            ]}
+          >
+            Registra cuánto te cuesta producir o comprar una unidad.
+          </Text>
+          <Field label="Costo o inversión por unidad (opcional)" theme={theme}>
+            <MoneyInput
+              value={investment}
+              onChange={setInvestment}
+              accessibilityLabel="Costo o inversión por unidad"
+            />
+          </Field>
+        </>
+      ) : null}
+    </GlassCard>,
+
+    <GlassCard key="goal" contentStyle={styles.cardContent}>
+      <Text
+        style={[styles.stepIntro, { color: theme.colors.textSecondary }]}
+      >
+        Puedes dejarla en cero y agregarla más adelante.
+      </Text>
+      <Field label="Meta de ganancia (opcional)" theme={theme}>
+        <View style={styles.goalPeriods}>
+          {GOAL_PERIODS.map((period) => {
+            const selected = goalPeriod === period.id;
+            return (
+              <Pressable
+                key={period.id}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                onPress={() => setGoalPeriod(period.id)}
+                style={[
+                  styles.goalPeriod,
+                  {
+                    backgroundColor: selected
+                      ? theme.colors.accent
+                      : theme.colors.inputBackground,
+                    borderColor: selected
+                      ? theme.colors.accent
+                      : theme.colors.separator,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.goalPeriodText,
+                    { color: selected ? theme.colors.onAccent : theme.colors.text },
+                  ]}
+                >
+                  {period.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <MoneyInput
+          value={goalAmount}
+          onChange={setGoalAmount}
+          accessibilityLabel={`Meta de ganancia ${goalPeriod}`}
+        />
+        <Text style={[styles.helperText, { color: theme.colors.textMuted }]}>
+          Es una meta de ganancia neta. Equivale a {formatCOP(dailyGoal)} por día.
+        </Text>
+      </Field>
+
+    </GlassCard>,
+  ];
 
   return (
-    <Screen avoidKeyboard contentStyle={styles.screenContent}>
-      <FadeInView delay={0} style={styles.header}>
+    <Screen scroll={false} avoidKeyboard contentStyle={styles.screenContent}>
+      <View style={styles.topBar}>
         <BackButton onPress={goBack} />
-      </FadeInView>
+        <Text style={[styles.stepCount, { color: theme.colors.textMuted }]}>
+          {step <= 2 ? `Paso ${step} de 3` : `Paso 3.${financialStep} de 3`}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={
+            step === 5
+              ? `Guardar ${isProduct ? 'producto' : 'servicio'}`
+              : 'Continuar al siguiente paso'
+          }
+          accessibilityHint={
+            step === 5
+              ? 'Guarda el producto o servicio'
+              : 'Avanza sin bajar hasta el final de la pantalla'
+          }
+          disabled={saving || loadingImage}
+          onPress={continueToNextStep}
+          style={({ pressed }) => [
+            styles.topAdvanceButton,
+            {
+              backgroundColor: theme.colors.accentSoft,
+              opacity: saving || loadingImage ? 0.45 : pressed ? 0.7 : 1,
+            },
+          ]}
+        >
+          {saving ? (
+            <ActivityIndicator color={theme.colors.accent} />
+          ) : (
+            <Text
+              style={[
+                styles.topAdvanceArrow,
+                { color: theme.colors.accent },
+              ]}
+            >
+              →
+            </Text>
+          )}
+        </Pressable>
+      </View>
+
+      <StepIndicator
+        total={isProduct ? STEPS.length : STEPS.length - 1}
+        current={progressStep}
+      />
 
       <ScrollView
+        style={styles.formScroll}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { gap: theme.spacing.lg }]}
+        contentContainerStyle={styles.scrollContent}
       >
-        <FadeInView delay={60}>
-          <Text
-            style={[styles.overline, { color: theme.colors.accent }]}
-            maxFontSizeMultiplier={1.3}
-          >
-            NUEVO ELEMENTO
-          </Text>
+        <View style={styles.heading}>
           <Text
             accessibilityRole="header"
             style={[styles.title, { color: theme.colors.text }]}
           >
-            {isProduct ? 'Nuevo producto' : 'Nuevo servicio'}
+            {STEPS[step - 1].title}
           </Text>
           <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-            {isProduct
-              ? 'Para productos que compras o preparas para vender (ej. canasta de huevos, postres, ropa).'
-              : 'Para servicios por viaje, hora o trabajo realizado (ej. InDriver, cortes de cabello, reparaciones).'}
+            {STEPS[step - 1].subtitle}
           </Text>
-        </FadeInView>
+        </View>
 
-        {/* Selector de Tipo (Producto vs Servicio) */}
-        <FadeInView delay={110}>
-          <View
-            style={[
-              styles.typeSelector,
-              { backgroundColor: theme.colors.inputBackground },
-            ]}
+        {stepContent[step - 1]}
+
+        {errorMessage ? (
+          <Text
+            accessibilityRole="alert"
+            style={[styles.error, { color: theme.colors.danger }]}
           >
-            <Pressable
-              accessibilityRole="radio"
-              accessibilityState={{ selected: isProduct }}
-              onPress={() => setType('product')}
-              style={[
-                styles.typeOption,
-                isProduct && { backgroundColor: theme.colors.surfaceStrong },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.typeOptionText,
-                  {
-                    color: isProduct ? theme.colors.text : theme.colors.textMuted,
-                    fontWeight: isProduct ? '700' : '500',
-                  },
-                ]}
-              >
-                📦 Producto
-              </Text>
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="radio"
-              accessibilityState={{ selected: !isProduct }}
-              onPress={() => setType('service')}
-              style={[
-                styles.typeOption,
-                !isProduct && { backgroundColor: theme.colors.surfaceStrong },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.typeOptionText,
-                  {
-                    color: !isProduct ? theme.colors.text : theme.colors.textMuted,
-                    fontWeight: !isProduct ? '700' : '500',
-                  },
-                ]}
-              >
-                🚗 Servicio
-              </Text>
-            </Pressable>
-          </View>
-        </FadeInView>
-
-        {/* Formulario en GlassCard */}
-        <FadeInView delay={160}>
-          <GlassCard contentStyle={{ gap: theme.spacing.lg }}>
-            {/* Nombre */}
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>
-                Nombre
-              </Text>
-              <View
-                style={[
-                  styles.inputContainer,
-                  {
-                    backgroundColor: theme.colors.inputBackground,
-                    borderColor: theme.colors.separator,
-                  },
-                ]}
-              >
-                <TextInput
-                  style={[styles.input, { color: theme.colors.text }]}
-                  maxFontSizeMultiplier={1.4}
-                  value={name}
-                  onChangeText={setName}
-                  placeholder={
-                    isProduct
-                      ? 'Ej. Canasta de 30 huevos'
-                      : 'Ej. Viajes de InDriver'
-                  }
-                  placeholderTextColor={theme.colors.textMuted}
-                  autoCapitalize="sentences"
-                  autoFocus
-                />
-              </View>
-            </View>
-
-            {/* Cantidad estimada al día */}
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>
-                Cantidad estimada al día ({isProduct ? 'unidades' : 'servicios'})
-              </Text>
-              <View
-                style={[
-                  styles.inputContainer,
-                  {
-                    backgroundColor: theme.colors.inputBackground,
-                    borderColor: theme.colors.separator,
-                  },
-                ]}
-              >
-                <TextInput
-                  style={[styles.input, { color: theme.colors.text }]}
-                  maxFontSizeMultiplier={1.4}
-                  value={String(quantity)}
-                  onChangeText={(text) => {
-                    const digits = text.replace(/\D/g, '');
-                    setQuantity(digits === '' ? 0 : parseInt(digits, 10));
-                  }}
-                  placeholder="1"
-                  placeholderTextColor={theme.colors.textMuted}
-                  keyboardType="number-pad"
-                  inputMode="numeric"
-                />
-              </View>
-            </View>
-
-            {/* Precio de venta o tarifa por unidad */}
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>
-                Precio de venta o tarifa por unidad (COP)
-              </Text>
-              <View
-                style={[
-                  styles.inputContainer,
-                  {
-                    backgroundColor: theme.colors.inputBackground,
-                    borderColor: theme.colors.separator,
-                  },
-                ]}
-              >
-                <MoneyInput
-                  value={pricePerUnit}
-                  onChange={setPricePerUnit}
-                  accessibilityLabel="Precio de venta por unidad"
-                />
-              </View>
-            </View>
-
-            {/* Inversión total (solo para productos) */}
-            {isProduct ? (
-              <View style={styles.fieldGroup}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>
-                  Costo total de inversión para este lote (COP)
-                </Text>
-                <View
-                  style={[
-                    styles.inputContainer,
-                    {
-                      backgroundColor: theme.colors.inputBackground,
-                      borderColor: theme.colors.separator,
-                    },
-                  ]}
-                >
-                  <MoneyInput
-                    value={investment}
-                    onChange={setInvestment}
-                    accessibilityLabel="Inversión total"
-                  />
-                </View>
-                <Text style={[styles.fieldHint, { color: theme.colors.textMuted }]}>
-                  Lo que te costó comprar o producir todas las {quantity} unidades.
-                </Text>
-              </View>
-            ) : null}
-
-            {/* Meta de ganancia diaria */}
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>
-                Meta de ganancia diaria (COP - Opcional)
-              </Text>
-              <View
-                style={[
-                  styles.inputContainer,
-                  {
-                    backgroundColor: theme.colors.inputBackground,
-                    borderColor: theme.colors.separator,
-                  },
-                ]}
-              >
-                <MoneyInput
-                  value={dailyGoal}
-                  onChange={setDailyGoal}
-                  accessibilityLabel="Meta de ganancia diaria"
-                />
-              </View>
-            </View>
-
-            {/* Error si existe */}
-            {errorMessage ? (
-              <Text
-                accessibilityRole="alert"
-                style={[styles.error, { color: theme.colors.danger }]}
-              >
-                {errorMessage}
-              </Text>
-            ) : null}
-          </GlassCard>
-        </FadeInView>
-
-        {/* Vista previa en tiempo real de la ganancia */}
-        {pricePerUnit > 0 ? (
-          <FadeInView delay={200}>
-            <GlassCard
-              contentStyle={[
-                styles.previewCard,
-                {
-                  backgroundColor:
-                    calculation.profit >= 0
-                      ? theme.colors.successSoft
-                      : theme.colors.dangerSoft,
-                  borderColor:
-                    calculation.profit >= 0
-                      ? theme.colors.success
-                      : theme.colors.danger,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.previewTitle,
-                  {
-                    color:
-                      calculation.profit >= 0
-                        ? theme.colors.success
-                        : theme.colors.danger,
-                  },
-                ]}
-              >
-                📊 Proyección estimada diaria
-              </Text>
-
-              <View style={styles.previewRow}>
-                <Text style={[styles.previewLabel, { color: theme.colors.textSecondary }]}>
-                  Ganancia libre estimada:
-                </Text>
-                <Text
-                  style={[
-                    styles.previewValueBold,
-                    {
-                      color:
-                        calculation.profit >= 0
-                          ? theme.colors.success
-                          : theme.colors.danger,
-                    },
-                  ]}
-                >
-                  {formatCOP(Math.round(calculation.profit))}
-                </Text>
-              </View>
-
-              <View style={styles.previewRow}>
-                <Text style={[styles.previewLabel, { color: theme.colors.textMuted }]}>
-                  Ingreso bruto ({quantity} × {formatCOP(pricePerUnit)}):
-                </Text>
-                <Text style={[styles.previewValue, { color: theme.colors.text }]}>
-                  {formatCOP(Math.round(calculation.revenue))}
-                </Text>
-              </View>
-
-              {isProduct ? (
-                <View style={styles.previewRow}>
-                  <Text style={[styles.previewLabel, { color: theme.colors.textMuted }]}>
-                    Costo unitario ({formatCOP(investment)} ÷ {quantity}):
-                  </Text>
-                  <Text style={[styles.previewValue, { color: theme.colors.text }]}>
-                    {formatCOP(Math.round(calculation.costPerUnit))}
-                  </Text>
-                </View>
-              ) : null}
-            </GlassCard>
-          </FadeInView>
+            {errorMessage}
+          </Text>
         ) : null}
 
-        {/* Botones de acción */}
-        <FadeInView delay={240} style={styles.bottomActions}>
+        <View style={styles.actions}>
           <PrimaryButton
-            label={saving ? 'Guardando…' : 'Guardar en mi negocio'}
+            label={
+              step === 5
+                ? saving
+                  ? 'Guardando…'
+                  : isProduct
+                    ? 'Guardar producto'
+                    : 'Guardar servicio'
+                : step === 2 && !imageUri
+                  ? 'Continuar sin imagen'
+                  : 'Continuar'
+            }
             loading={saving}
-            disabled={!name.trim() || quantity <= 0 || pricePerUnit <= 0}
-            onPress={handleSave}
+            disabled={saving || loadingImage}
+            onPress={continueToNextStep}
           />
-          <PrimaryButton
-            label="Cancelar"
-            variant="ghost"
-            disabled={saving}
-            onPress={goBack}
-          />
-        </FadeInView>
+        </View>
       </ScrollView>
     </Screen>
+  );
+}
+
+function Field({
+  label,
+  theme,
+  children,
+}: {
+  label: string;
+  theme: ReturnType<typeof useTheme>;
+  children: ReactNode;
+}) {
+  return (
+    <View style={styles.field}>
+      <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>
+        {label}
+      </Text>
+      {children}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screenContent: {
     justifyContent: 'flex-start',
-    gap: 16,
+    gap: 20,
   },
-  header: {
-    gap: 8,
+  formScroll: {
+    flex: 1,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  stepCount: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  topAdvanceButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  topAdvanceArrow: {
+    fontSize: 24,
+    lineHeight: 28,
+    fontWeight: '700',
+  },
+  stepIntro: {
+    fontSize: 14,
+    lineHeight: 20,
   },
   scrollContent: {
-    paddingBottom: 48,
+    flexGrow: 1,
+    gap: 24,
+    paddingTop: 8,
+    paddingBottom: 36,
   },
-  overline: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.8,
+  heading: {
+    gap: 6,
   },
   title: {
     fontSize: 28,
@@ -449,7 +567,9 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 15,
     lineHeight: 21,
-    maxWidth: 380,
+  },
+  cardContent: {
+    gap: 22,
   },
   typeSelector: {
     flexDirection: 'row',
@@ -459,74 +579,96 @@ const styles = StyleSheet.create({
   },
   typeOption: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
+    minHeight: 44,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },
   typeOptionText: {
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 15,
   },
-  fieldGroup: {
-    gap: 6,
+  field: {
+    gap: 8,
   },
   fieldLabel: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 19,
     fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
-  fieldHint: {
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  inputContainer: {
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
+  textInput: {
+    minHeight: 54,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    fontSize: 17,
+    lineHeight: 23,
   },
-  input: {
-    fontSize: 18,
-    lineHeight: 24,
+  descriptionInput: {
+    minHeight: 110,
+    textAlignVertical: 'top',
   },
-  previewCard: {
-    padding: 16,
+  imageCard: {
+    alignItems: 'stretch',
+    gap: 14,
+  },
+  productImage: {
+    width: '100%',
+    aspectRatio: 1.4,
+    borderRadius: 16,
+    backgroundColor: '#80808022',
+  },
+  imagePlaceholder: {
+    width: '100%',
+    aspectRatio: 1.4,
     borderRadius: 16,
     borderWidth: 1,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    gap: 6,
+  },
+  imagePlaceholderTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  imagePlaceholderHint: {
+    textAlign: 'center',
+    fontSize: 14,
+    lineHeight: 19,
+  },
+  optionalNote: {
+    textAlign: 'center',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  goalPeriods: {
+    flexDirection: 'row',
     gap: 8,
   },
-  previewTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  previewRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  goalPeriod: {
+    flex: 1,
+    minHeight: 44,
+    borderWidth: 1,
+    borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  previewLabel: {
-    fontSize: 13,
-  },
-  previewValue: {
-    fontSize: 13,
+  goalPeriodText: {
+    fontSize: 14,
     fontWeight: '600',
   },
-  previewValueBold: {
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  bottomActions: {
-    gap: 8,
-    width: '100%',
-    marginTop: 8,
+  helperText: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   error: {
     fontSize: 14,
     lineHeight: 20,
-    textAlign: 'center',
+  },
+  actions: {
+    gap: 8,
+    marginTop: 'auto',
   },
 });

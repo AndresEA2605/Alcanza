@@ -1,6 +1,16 @@
-import { calculateBusiness, sumBusinessCalculations } from '../src/domain/business';
+import {
+  calculateBusiness,
+  normalizeBusinessGoal,
+  sumBusinessCalculations,
+} from '../src/domain/business';
 
 describe('cálculos de negocio', () => {
+  it('convierte metas mensuales y anuales a su equivalente diario', () => {
+    expect(normalizeBusinessGoal(300000, 'monthly')).toBe(10000);
+    expect(normalizeBusinessGoal(3650000, 'yearly')).toBe(10000);
+    expect(normalizeBusinessGoal(10000, 'daily')).toBe(10000);
+  });
+
   it('calcula ganancia de un producto (canasta de huevos)', () => {
     // Inversión: $140.000 por 14 canastas, se venden a $12.000 cada una
     const result = calculateBusiness({
