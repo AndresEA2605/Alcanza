@@ -1,6 +1,7 @@
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 
 import { useTheme } from '../theme';
+import { HapticPressable as Pressable } from './HapticPressable';
 
 interface FloatingActionButtonProps {
   onPress: () => void;

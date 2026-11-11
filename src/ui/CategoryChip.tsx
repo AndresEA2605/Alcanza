@@ -1,7 +1,8 @@
-import { Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Text, StyleSheet } from 'react-native';
 
 import { CATEGORIES, type Category } from '../domain/budget';
 import { useTheme } from '../theme';
+import { HapticPressable } from './HapticPressable';
 
 interface CategoryChipProps {
   category: Category;
@@ -14,7 +15,7 @@ export function CategoryChip({ category, selected, onPress }: CategoryChipProps)
   const categoryMeta = CATEGORIES.find((item) => item.id === category);
 
   return (
-    <TouchableOpacity
+    <HapticPressable
       accessibilityRole="button"
       accessibilityState={{ selected }}
       accessibilityLabel={categoryMeta?.label ?? category}
@@ -42,7 +43,7 @@ export function CategoryChip({ category, selected, onPress }: CategoryChipProps)
       >
         {categoryMeta?.label ?? category}
       </Text>
-    </TouchableOpacity>
+    </HapticPressable>
   );
 }
 

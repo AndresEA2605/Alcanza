@@ -33,9 +33,11 @@ export function GlassCard({
   const cardStyle: StyleProp<ViewStyle> = [
     styles.card,
     {
-      borderRadius: theme.radii.lg,
-      borderColor: theme.colors.glassBorder,
+      borderRadius: 20,
+      borderColor: theme.colors.separator,
       backgroundColor: theme.colors.glass,
+      shadowColor: theme.colors.shadow,
+      shadowOpacity: theme.mode === 'dark' ? 0.24 : 0.08,
     },
     style,
   ];
@@ -45,9 +47,9 @@ export function GlassCard({
       style={[
         styles.inner,
         {
-          padding: theme.spacing.xl,
+          padding: theme.spacing.lg,
           gap: theme.spacing.md,
-          borderColor: theme.colors.glassBorder,
+          borderColor: theme.colors.separator,
         },
         contentStyle,
       ]}
@@ -73,8 +75,11 @@ export function GlassCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     overflow: 'hidden',
+    shadowOffset: { width: 0, height: 5 },
+    shadowRadius: 12,
+    elevation: 3,
   },
   inner: {
     borderWidth: 0,

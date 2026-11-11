@@ -1,6 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { useTheme } from '../theme';
+import { HapticPressable as Pressable } from './HapticPressable';
 
 export type SheetMode = 'gasto' | 'ingreso';
 

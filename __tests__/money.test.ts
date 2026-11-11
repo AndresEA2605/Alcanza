@@ -37,6 +37,7 @@ describe('formatCOPInput', () => {
     expect(formatCOPInput('12')).toBe('12');
     expect(formatCOPInput('123')).toBe('123');
     expect(formatCOPInput('1234')).toBe('1.234');
+    expect(formatCOPInput('100000')).toBe('100.000');
     expect(formatCOPInput('1250000')).toBe('1.250.000');
   });
 

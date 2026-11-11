@@ -2,7 +2,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
-  Pressable,
+  Pressable as NativePressable,
   StyleSheet,
   Text,
   TextInput,
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import { useTheme } from '../../theme';
+import { HapticPressable as Pressable } from '../HapticPressable';
 import { PrimaryButton } from '../PrimaryButton';
 
 interface DataResetModalProps {
@@ -47,10 +48,10 @@ export function DataResetModal({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.overlay}
       >
-        <Pressable
+        <NativePressable
           accessibilityElementsHidden
           onPress={onClose}
-          style={styles.backdrop}
+          style={[styles.backdrop, { backgroundColor: theme.colors.scrim }]}
         />
         <View
           accessibilityViewIsModal
@@ -152,7 +153,6 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.55)',
   },
   card: {
     width: '100%',

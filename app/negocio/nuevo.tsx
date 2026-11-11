@@ -5,7 +5,6 @@ import {
   ActivityIndicator,
   Image,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,17 +12,13 @@ import {
   View,
 } from 'react-native';
 
-import {
-  normalizeBusinessGoal,
-  type BusinessGoalPeriod,
-  type BusinessType,
-} from '../../src/domain/business';
+import type { BusinessType } from '../../src/domain/business';
 import { persistProductImage } from '../../src/data/productImageStorage';
-import { formatCOP } from '../../src/domain/money';
 import { useBusinessStore } from '../../src/store/useBusinessStore';
 import { useTheme } from '../../src/theme';
 import { BackButton } from '../../src/ui/BackButton';
 import { GlassCard } from '../../src/ui/GlassCard';
+import { HapticPressable as Pressable } from '../../src/ui/HapticPressable';
 import { MoneyInput } from '../../src/ui/MoneyInput';
 import { PrimaryButton } from '../../src/ui/PrimaryButton';
 import { Screen } from '../../src/ui/Screen';
@@ -40,20 +35,7 @@ const STEPS = [
     title: 'Registra tu inversión',
     subtitle: 'Anota cuánto te cuesta producir o comprar una unidad.',
   },
-  {
-    title: 'Define tu meta',
-    subtitle: 'Si quieres, establece una meta de ganancia.',
-  },
 ] as const;
-
-const GOAL_PERIODS: readonly {
-  id: BusinessGoalPeriod;
-  label: string;
-}[] = [
-  { id: 'daily', label: 'Diaria' },
-  { id: 'monthly', label: 'Mensual' },
-  { id: 'yearly', label: 'Anual' },
-];
 
 export default function NuevoNegocioScreen() {
   const theme = useTheme();
@@ -66,22 +48,15 @@ export default function NuevoNegocioScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [pricePerUnit, setPricePerUnit] = useState(0);
   const [investment, setInvestment] = useState(0);
-  const [goalAmount, setGoalAmount] = useState(0);
-  const [goalPeriod, setGoalPeriod] = useState<BusinessGoalPeriod>('daily');
   const [saving, setSaving] = useState(false);
   const [loadingImage, setLoadingImage] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const isProduct = type === 'product';
-  const financialStep = step === 3 ? 1 : isProduct ? step - 2 : 2;
-  const progressStep = step > 3 && !isProduct ? step - 1 : step;
-  const dailyGoal = normalizeBusinessGoal(goalAmount, goalPeriod);
+  const lastStep = isProduct ? STEPS.length : STEPS.length - 1;
   function goBack() {
     if (step > 1) {
-      setStep((current) => {
-        if (current === 5 && !isProduct) return 3;
-        return current - 1;
-      });
+      setStep((current) => current - 1);
       setErrorMessage(null);
       return;
     }
@@ -108,12 +83,17 @@ export default function NuevoNegocioScreen() {
       }
     }
 
-    if (step === 5) {
+    if (step === lastStep) {
       void saveItem();
       return;
     }
 
-    setStep((current) => (current === 3 && !isProduct ? 5 : current + 1));
+    if (step === 3 && !isProduct) {
+      void saveItem();
+      return;
+    }
+
+    setStep((current) => current + 1);
   }
 
   async function pickImage() {
@@ -170,9 +150,9 @@ export default function NuevoNegocioScreen() {
         quantity: 1,
         pricePerUnit,
         investment: isProduct ? investment : 0,
-        dailyGoal,
-        goalAmount,
-        goalPeriod,
+        dailyGoal: 0,
+        goalAmount: 0,
+        goalPeriod: 'daily',
       });
       router.replace('/negocio');
     } catch (error) {
@@ -269,7 +249,13 @@ export default function NuevoNegocioScreen() {
 
     <GlassCard key="image" contentStyle={styles.imageCard}>
       {imageUri ? (
-        <Image source={{ uri: imageUri }} style={styles.productImage} />
+        <Image
+          source={{ uri: imageUri }}
+          style={[
+            styles.productImage,
+            { backgroundColor: theme.colors.inputBackground },
+          ]}
+        />
       ) : (
         <View
           style={[
@@ -342,58 +328,6 @@ export default function NuevoNegocioScreen() {
         </>
       ) : null}
     </GlassCard>,
-
-    <GlassCard key="goal" contentStyle={styles.cardContent}>
-      <Text
-        style={[styles.stepIntro, { color: theme.colors.textSecondary }]}
-      >
-        Puedes dejarla en cero y agregarla más adelante.
-      </Text>
-      <Field label="Meta de ganancia (opcional)" theme={theme}>
-        <View style={styles.goalPeriods}>
-          {GOAL_PERIODS.map((period) => {
-            const selected = goalPeriod === period.id;
-            return (
-              <Pressable
-                key={period.id}
-                accessibilityRole="radio"
-                accessibilityState={{ selected }}
-                onPress={() => setGoalPeriod(period.id)}
-                style={[
-                  styles.goalPeriod,
-                  {
-                    backgroundColor: selected
-                      ? theme.colors.accent
-                      : theme.colors.inputBackground,
-                    borderColor: selected
-                      ? theme.colors.accent
-                      : theme.colors.separator,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.goalPeriodText,
-                    { color: selected ? theme.colors.onAccent : theme.colors.text },
-                  ]}
-                >
-                  {period.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-        <MoneyInput
-          value={goalAmount}
-          onChange={setGoalAmount}
-          accessibilityLabel={`Meta de ganancia ${goalPeriod}`}
-        />
-        <Text style={[styles.helperText, { color: theme.colors.textMuted }]}>
-          Es una meta de ganancia neta. Equivale a {formatCOP(dailyGoal)} por día.
-        </Text>
-      </Field>
-
-    </GlassCard>,
   ];
 
   return (
@@ -401,17 +335,17 @@ export default function NuevoNegocioScreen() {
       <View style={styles.topBar}>
         <BackButton onPress={goBack} />
         <Text style={[styles.stepCount, { color: theme.colors.textMuted }]}>
-          {step <= 2 ? `Paso ${step} de 3` : `Paso 3.${financialStep} de 3`}
+          Paso {step} de {lastStep}
         </Text>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={
-            step === 5
+            step === lastStep
               ? `Guardar ${isProduct ? 'producto' : 'servicio'}`
               : 'Continuar al siguiente paso'
           }
           accessibilityHint={
-            step === 5
+            step === lastStep
               ? 'Guarda el producto o servicio'
               : 'Avanza sin bajar hasta el final de la pantalla'
           }
@@ -440,10 +374,7 @@ export default function NuevoNegocioScreen() {
         </Pressable>
       </View>
 
-      <StepIndicator
-        total={isProduct ? STEPS.length : STEPS.length - 1}
-        current={progressStep}
-      />
+      <StepIndicator total={lastStep} current={step} />
 
       <ScrollView
         style={styles.formScroll}
@@ -477,7 +408,7 @@ export default function NuevoNegocioScreen() {
         <View style={styles.actions}>
           <PrimaryButton
             label={
-              step === 5
+              step === lastStep
                 ? saving
                   ? 'Guardando…'
                   : isProduct
@@ -616,7 +547,6 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 1.4,
     borderRadius: 16,
-    backgroundColor: '#80808022',
   },
   imagePlaceholder: {
     width: '100%',
@@ -640,26 +570,6 @@ const styles = StyleSheet.create({
   },
   optionalNote: {
     textAlign: 'center',
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  goalPeriods: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  goalPeriod: {
-    flex: 1,
-    minHeight: 44,
-    borderWidth: 1,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  goalPeriodText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  helperText: {
     fontSize: 13,
     lineHeight: 18,
   },

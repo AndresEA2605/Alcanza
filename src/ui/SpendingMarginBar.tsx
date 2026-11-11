@@ -1,6 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -14,13 +13,12 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import type { BudgetStatus } from '../domain/budget';
 import { formatCOP } from '../domain/money';
-import type { MarginMode, MarginStatus, SpendingMarginResult } from '../domain/spendingMargin';
+import type { MarginMode, SpendingMarginResult } from '../domain/spendingMargin';
 import { useTheme } from '../theme';
 import { AnimatedNumber } from './AnimatedNumber';
 import { GlassCard } from './GlassCard';
-import { StatusPill } from './StatusPill';
+import { HapticPressable as Pressable } from './HapticPressable';
 
 export interface SpendingMarginBarProps {
   margin: SpendingMarginResult;
@@ -28,17 +26,6 @@ export interface SpendingMarginBarProps {
   style?: StyleProp<ViewStyle>;
   compact?: boolean;
   onPressDetail?: () => void;
-}
-
-function toBudgetStatus(status: MarginStatus): BudgetStatus {
-  switch (status) {
-    case 'bien':
-      return 'verde';
-    case 'aviso':
-      return 'naranja';
-    case 'limite':
-      return 'rojo';
-  }
 }
 
 /**
@@ -57,7 +44,7 @@ export function SpendingMarginBar({
   onPressDetail,
 }: SpendingMarginBarProps) {
   const theme = useTheme();
-  const budgetStatus = toBudgetStatus(margin.status);
+  const [showExplanation, setShowExplanation] = useState(false);
 
   const activeColor = {
     bien: theme.colors.success,
@@ -85,6 +72,14 @@ export function SpendingMarginBar({
 
   const isHoy = margin.mode === 'hoy';
   const isSemana = margin.mode === 'semana';
+  const statusLabel =
+    margin.status === 'bien'
+      ? 'En orden'
+      : margin.status === 'aviso'
+        ? 'Ajustado'
+        : margin.remaining < 0
+          ? 'Excedido'
+          : 'Al límite';
 
   if (compact) {
     const periodLabel =
@@ -93,7 +88,6 @@ export function SpendingMarginBar({
         : margin.mode === 'semana'
           ? 'esta semana'
           : 'este mes';
-
     return (
       <Pressable
         accessibilityRole="button"
@@ -110,31 +104,18 @@ export function SpendingMarginBar({
         ]}
       >
         <View style={styles.compactTopRow}>
-          <View style={styles.compactLeft}>
-            <View style={styles.compactHeading}>
-              <View
-                style={[styles.compactDot, { backgroundColor: activeColor }]}
-              />
-              <Text
-                style={[styles.compactTitle, { color: theme.colors.text }]}
-                numberOfLines={1}
-              >
-                Margen de {periodLabel}
-              </Text>
-              <Text
-                style={[styles.compactPercentage, { color: activeColor }]}
-              >
-                {margin.percentage}%
-              </Text>
-            </View>
+          <View style={styles.compactHeading}>
+            <View
+              style={[styles.compactDot, { backgroundColor: activeColor }]}
+            />
             <Text
-              style={[
-                styles.compactHeadline,
-                { color: theme.colors.textSecondary },
-              ]}
-              numberOfLines={2}
+              style={[styles.compactTitle, { color: theme.colors.text }]}
+              numberOfLines={1}
             >
-              {margin.headline}
+              {statusLabel}
+            </Text>
+            <Text style={[styles.compactPercentage, { color: activeColor }]}>
+              {margin.percentage}%
             </Text>
           </View>
           {onPressDetail ? (
@@ -144,8 +125,9 @@ export function SpendingMarginBar({
                   styles.compactLinkText,
                   { color: theme.colors.accent },
                 ]}
+                accessibilityElementsHidden
               >
-                Ver balance
+                →
               </Text>
             </View>
           ) : null}
@@ -172,31 +154,23 @@ export function SpendingMarginBar({
   return (
     <GlassCard
       style={style}
-      contentStyle={{ gap: theme.spacing.md }}
+      contentStyle={{ gap: theme.spacing.lg }}
     >
       {/* Encabezado: Título y StatusPill */}
       <View style={styles.header}>
         <View style={styles.titleColumn}>
-          <Text
-            style={[styles.overline, { color: theme.colors.textMuted }]}
-            maxFontSizeMultiplier={1.3}
-          >
-            MARGEN DE GASTO RAZONABLE
-          </Text>
           <Text
             accessibilityRole="header"
             style={[styles.title, { color: theme.colors.text }]}
             maxFontSizeMultiplier={1.3}
           >
             {isHoy
-              ? 'Cuota diaria de hoy'
+              ? 'Hoy'
               : isSemana
-                ? 'Presupuesto de la semana'
-                : 'Presupuesto del mes'}
+                ? 'Esta semana'
+                : 'Este mes'}
           </Text>
         </View>
-
-        <StatusPill status={budgetStatus} />
       </View>
 
       {/* Selector de periodo */}
@@ -227,7 +201,7 @@ export function SpendingMarginBar({
                 },
               ]}
             >
-              Hoy (diario)
+              Hoy
             </Text>
           </Pressable>
 
@@ -284,11 +258,11 @@ export function SpendingMarginBar({
         </View>
       ) : null}
 
-      {/* Métrica principal: Porcentaje consumido */}
+      {/* Métricas del periodo */}
       <View style={styles.metricsRow}>
         <View style={styles.metricItem}>
           <Text style={[styles.metricLabel, { color: theme.colors.textSecondary }]}>
-            Consumo del margen
+            Usado
           </Text>
           <View style={styles.percentageContainer}>
             <AnimatedNumber
@@ -307,11 +281,7 @@ export function SpendingMarginBar({
 
         <View style={[styles.metricItem, styles.metricRight]}>
           <Text style={[styles.metricLabel, { color: theme.colors.textSecondary }]}>
-            {isHoy
-              ? 'Queda hoy en margen'
-              : isSemana
-                ? 'Queda esta semana'
-                : 'Queda en el mes'}
+            Disponible
           </Text>
           <Text
             style={[
@@ -379,53 +349,61 @@ export function SpendingMarginBar({
         />
       </View>
 
-      {/* Leyenda de zonas (Conservador / Normal / Límite) */}
+      {/* Umbrales de uso */}
       <View style={styles.legendRow}>
         <View style={styles.legendItem}>
           <View style={[styles.legendDot, { backgroundColor: theme.colors.success }]} />
           <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
-            Conservador (0–70%)
+            0–70%
           </Text>
         </View>
 
         <View style={styles.legendItem}>
           <View style={[styles.legendDot, { backgroundColor: theme.colors.warning }]} />
           <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
-            Normal (70–90%)
+            70–90%
           </Text>
         </View>
 
         <View style={styles.legendItem}>
           <View style={[styles.legendDot, { backgroundColor: theme.colors.danger }]} />
           <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
-            Límite (&gt;90%)
+            90–100%+
           </Text>
         </View>
       </View>
 
-      {/* Explicación contextual del por qué */}
-      <View
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: showExplanation }}
+        onPress={() => setShowExplanation((visible) => !visible)}
         style={[
-          styles.explanationCard,
-          {
-            backgroundColor: theme.colors.inputBackground,
-            borderColor: theme.colors.separator,
-          },
+          styles.explanationToggle,
+          { borderTopColor: theme.colors.separator },
         ]}
       >
-        <Text
-          style={[styles.explanationHeadline, { color: activeColor }]}
-          maxFontSizeMultiplier={1.3}
-        >
-          {margin.headline}
+        <Text style={[styles.explanationToggleText, { color: theme.colors.accent }]}>
+          {showExplanation ? 'Menos' : '¿Cómo se calcula?'}
         </Text>
-        <Text
-          style={[styles.explanationText, { color: theme.colors.textSecondary }]}
-          maxFontSizeMultiplier={1.3}
-        >
-          {margin.explanation}
+        <Text style={[styles.explanationToggleText, { color: theme.colors.accent }]}>
+          {showExplanation ? '−' : '+'}
         </Text>
-      </View>
+      </Pressable>
+      {showExplanation ? (
+        <View
+          style={[
+            styles.explanationCard,
+            { backgroundColor: theme.colors.inputBackground },
+          ]}
+        >
+          <Text
+            style={[styles.explanationText, { color: theme.colors.textSecondary }]}
+            maxFontSizeMultiplier={1.3}
+          >
+            {margin.explanation}
+          </Text>
+        </View>
+      ) : null}
     </GlassCard>
   );
 }
@@ -440,11 +418,6 @@ const styles = StyleSheet.create({
   titleColumn: {
     flex: 1,
     gap: 2,
-  },
-  overline: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.6,
   },
   title: {
     fontSize: 18,
@@ -559,13 +532,18 @@ const styles = StyleSheet.create({
   explanationCard: {
     padding: 12,
     borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    gap: 4,
   },
-  explanationHeadline: {
+  explanationToggle: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 10,
+  },
+  explanationToggleText: {
     fontSize: 13,
-    fontWeight: '700',
     lineHeight: 18,
+    fontWeight: '700',
   },
   explanationText: {
     fontSize: 12,
@@ -583,10 +561,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     gap: 12,
-  },
-  compactLeft: {
-    gap: 6,
-    flex: 1,
   },
   compactHeading: {
     flexDirection: 'row',
@@ -610,17 +584,13 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '800',
   },
-  compactHeadline: {
-    fontSize: 12,
-    lineHeight: 17,
-  },
   compactLinkWrapper: {
     paddingTop: 1,
   },
   compactLinkText: {
-    fontSize: 11,
-    lineHeight: 16,
-    fontWeight: '700',
+    fontSize: 20,
+    lineHeight: 24,
+    fontWeight: '600',
   },
   compactBarTrack: {
     height: 6,

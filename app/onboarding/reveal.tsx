@@ -103,7 +103,7 @@ export default function RevealScreen() {
               ]}
             />
             <SummaryRow
-              label="Gastos fijos"
+              label="Reservado para gastos fijos"
               value={formatCOP(-config.fixed)}
             />
             <View
@@ -113,7 +113,7 @@ export default function RevealScreen() {
               ]}
             />
             <SummaryRow
-              label="Disponible para el mes"
+              label="Disponible tras gastos fijos"
               value={formatCOP(disposable)}
               strong
             />

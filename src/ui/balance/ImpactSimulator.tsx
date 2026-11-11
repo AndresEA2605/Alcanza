@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import type {
   CalcTodayResult,
@@ -10,6 +10,7 @@ import { calcSpendingMargin } from '../../domain/spendingMargin';
 import { formatCOP } from '../../domain/money';
 import { useTheme } from '../../theme';
 import { GlassCard } from '../GlassCard';
+import { HapticPressable as Pressable } from '../HapticPressable';
 
 const SIMULATION_AMOUNTS = [10_000, 30_000, 50_000, 100_000] as const;
 
@@ -63,24 +64,14 @@ export function ImpactSimulator({
   return (
     <GlassCard contentStyle={styles.card}>
       <View style={styles.header}>
-        <Text style={[styles.eyebrow, { color: theme.colors.accent }]}>
-          SIMULACIÓN
-        </Text>
         <Text
           style={[styles.title, { color: theme.colors.text }]}
           maxFontSizeMultiplier={1.3}
         >
-          ¿Y si gasto hoy?
-        </Text>
-        <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-          Elige un monto adicional y mira cómo cambiaría tu margen y el
-          disponible para mañana.
+          Simular gasto
         </Text>
       </View>
 
-      <Text style={[styles.sectionLabel, { color: theme.colors.text }]}>
-        ¿Cuánto gastarías?
-      </Text>
       <View
         style={styles.chipsRow}
         accessibilityRole="radiogroup"
@@ -156,14 +147,14 @@ export function ImpactSimulator({
           >
             <View style={styles.resultHeading}>
               <Text style={[styles.resultLabel, { color: theme.colors.textSecondary }]}>
-                Disponible diario para mañana
+                Mañana
               </Text>
               <Text style={[styles.resultStatus, { color: statusColor }]}>
                 {simulatedMargin.status === 'bien'
-                  ? 'Dentro del margen'
+                  ? 'En orden'
                   : simulatedMargin.status === 'aviso'
-                    ? 'Margen ajustado'
-                    : 'Sobre el límite'}
+                    ? 'Ajustado'
+                    : 'Sobre límite'}
               </Text>
             </View>
             <Text
@@ -197,19 +188,14 @@ export function ImpactSimulator({
             </View>
             <View style={styles.impactMeta}>
               <Text style={[styles.impactMetaText, { color: theme.colors.textSecondary }]}>
-                {simulatedMargin.percentage}% del margen de hoy
-              </Text>
-              <Text style={[styles.impactMetaText, { color: theme.colors.textSecondary }]}>
-                {today.daysLeft > 1
-                  ? `${today.daysLeft - 1} días restantes`
-                  : 'Último día del mes'}
+                {simulatedMargin.percentage}% del margen
               </Text>
             </View>
           </View>
 
-          <ComparisonRow label="Proyección actual" value={formatCOP(Math.round(today.tomorrow))} />
+          <ComparisonRow label="Antes" value={formatCOP(Math.round(today.tomorrow))} />
           <ComparisonRow
-            label="Cambio por este gasto"
+            label="Impacto"
             value={`${simulatedMargin.tomorrowEstimated < today.tomorrow ? '−' : '+'}${formatCOP(
               Math.abs(
                 Math.round(simulatedMargin.tomorrowEstimated - today.tomorrow),
@@ -230,10 +216,10 @@ export function ImpactSimulator({
           ]}
         >
           <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
-            Elige un monto para empezar
+            Toca un monto
           </Text>
           <Text style={[styles.emptySubtitle, { color: theme.colors.textSecondary }]}>
-            La simulación no cambia tus gastos registrados.
+            Solo simulación · no se guarda
           </Text>
         </View>
       )}
@@ -276,24 +262,11 @@ const styles = StyleSheet.create({
   header: {
     gap: 6,
   },
-  eyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.9,
-  },
   title: {
     fontSize: 22,
     fontWeight: '800',
     lineHeight: 28,
     letterSpacing: -0.3,
-  },
-  subtitle: {
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  sectionLabel: {
-    fontSize: 14,
-    fontWeight: '700',
   },
   chipsRow: {
     flexDirection: 'row',

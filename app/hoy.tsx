@@ -1,5 +1,6 @@
 import { Redirect, router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { SymbolView } from 'expo-symbols';
+import { useEffect, useRef, useState } from 'react';
 import {
   RefreshControl,
   ScrollView,
@@ -10,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { longDateLabel } from '../src/domain/labels';
-import { formatCOP } from '../src/domain/money';
+import type { Category } from '../src/domain/budget';
 import {
   calcSpendingMarginFromState,
   calcTodayFromState,
@@ -20,7 +21,7 @@ import { useTheme } from '../src/theme';
 import { ExpenseSheet, type SheetMode } from '../src/ui/ExpenseSheet';
 import { FadeInView } from '../src/ui/FadeInView';
 import { FloatingActionButton } from '../src/ui/FloatingActionButton';
-import { GlassCard } from '../src/ui/GlassCard';
+import { HapticPressable as Pressable } from '../src/ui/HapticPressable';
 import { LoadingState } from '../src/ui/LoadingState';
 import { PrimaryButton } from '../src/ui/PrimaryButton';
 import { SuccessBanner } from '../src/ui/SuccessBanner';
@@ -29,7 +30,6 @@ import {
   BalanceShortcutCard,
   BusinessShortcutCard,
   DashboardBudgetCard,
-  MonthlySummaryCard,
   RegisterMovementCard,
   TodayMovementSection,
 } from '../src/ui/dashboard/DashboardSections';
@@ -60,19 +60,48 @@ export default function TodayScreen() {
   const [sheetVisible, setSheetVisible] = useState(false);
   const [sheetMode, setSheetMode] = useState<SheetMode | null>(null);
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('comida');
+  const [category, setCategory] = useState<Category>('comida');
   const [saving, setSaving] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [undoExpenseVisible, setUndoExpenseVisible] = useState(false);
   const [undoIncomeVisible, setUndoIncomeVisible] = useState(false);
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
+  const [bannerTone, setBannerTone] = useState<'success' | 'error'>('success');
   const [refreshing, setRefreshing] = useState(false);
   const [now] = useState(Date.now);
+  const bannerTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showBanner(message: string, tone: 'success' | 'error' = 'success') {
+    if (bannerTimeout.current) {
+      clearTimeout(bannerTimeout.current);
+    }
+    setBannerMessage(message);
+    setBannerTone(tone);
+    bannerTimeout.current = setTimeout(() => setBannerMessage(null), 3500);
+  }
+
+  function dismissBanner() {
+    if (bannerTimeout.current) {
+      clearTimeout(bannerTimeout.current);
+      bannerTimeout.current = null;
+    }
+    setBannerMessage(null);
+  }
 
   useEffect(() => {
     if (budgetStatus === 'idle') {
       void initializeBudget();
     }
   }, [budgetStatus, initializeBudget]);
+
+  useEffect(
+    () => () => {
+      if (bannerTimeout.current) {
+        clearTimeout(bannerTimeout.current);
+      }
+    },
+    [],
+  );
 
   const today = calcTodayFromState({ config, expenses, incomes }, now);
   const spendingMargin = calcSpendingMarginFromState(
@@ -99,8 +128,6 @@ export default function TodayScreen() {
     return <Redirect href="/onboarding/welcome" />;
   }
 
-  const remainingToday = Math.round(today.remaining);
-
   const todayExpenses = expenses.filter(
     (expense) =>
       expense.deletedAt == null &&
@@ -113,20 +140,24 @@ export default function TodayScreen() {
       new Date(income.ts).toDateString() === new Date(now).toDateString(),
   );
 
-  async function handleAddExpense(parsedAmount: number, chosenCategory: string) {
+  async function handleAddExpense(parsedAmount: number, chosenCategory: Category) {
     if (saving) return;
     setSaving(true);
+    setSubmissionError(null);
     try {
       await addExpense({
         amount: parsedAmount,
-        category: chosenCategory as 'comida' | 'transporte' | 'ocio' | 'otros',
+        category: chosenCategory,
       });
       setAmount('');
       setSheetVisible(false);
-      setBannerMessage('Gasto registrado con éxito');
-      setTimeout(() => setBannerMessage(null), 3500);
-    } catch {
-      // El store gestiona el error
+      showBanner('Gasto registrado con éxito');
+    } catch (error) {
+      setSubmissionError(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo guardar el gasto. Intenta de nuevo.',
+      );
     } finally {
       setSaving(false);
     }
@@ -135,6 +166,7 @@ export default function TodayScreen() {
   async function handleAddIncome(parsedAmount: number, description?: string) {
     if (saving) return;
     setSaving(true);
+    setSubmissionError(null);
     try {
       await addIncome({
         amount: parsedAmount,
@@ -142,40 +174,80 @@ export default function TodayScreen() {
       });
       setAmount('');
       setSheetVisible(false);
-      setBannerMessage('Ingreso adicional sumado a tu presupuesto');
-      setTimeout(() => setBannerMessage(null), 3500);
-    } catch {
-      // El store gestiona el error
+      showBanner('Ingreso adicional sumado a tu presupuesto');
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'No se pudo guardar el ingreso. Intenta de nuevo.';
+      setSubmissionError(message);
     } finally {
       setSaving(false);
     }
   }
 
-  function handleDeleteExpense(expenseId: string) {
-    void deleteExpense(expenseId);
-    setUndoExpenseVisible(true);
-    setTimeout(() => setUndoExpenseVisible(false), 5000);
+  async function handleDeleteExpense(expenseId: string) {
+    try {
+      await deleteExpense(expenseId);
+      setUndoExpenseVisible(true);
+      setTimeout(() => setUndoExpenseVisible(false), 5000);
+    } catch (error) {
+      showBanner(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo eliminar el gasto. Intenta de nuevo.',
+        'error',
+      );
+    }
   }
 
-  function handleUndoExpense() {
-    void undoDelete();
-    setUndoExpenseVisible(false);
+  async function handleUndoExpense() {
+    try {
+      await undoDelete();
+      setUndoExpenseVisible(false);
+    } catch (error) {
+      showBanner(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo recuperar el gasto. Intenta de nuevo.',
+        'error',
+      );
+    }
   }
 
-  function handleDeleteIncome(incomeId: string) {
-    void deleteIncome(incomeId);
-    setUndoIncomeVisible(true);
-    setTimeout(() => setUndoIncomeVisible(false), 5000);
+  async function handleDeleteIncome(incomeId: string) {
+    try {
+      await deleteIncome(incomeId);
+      setUndoIncomeVisible(true);
+      setTimeout(() => setUndoIncomeVisible(false), 5000);
+    } catch (error) {
+      showBanner(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo eliminar el ingreso. Intenta de nuevo.',
+        'error',
+      );
+    }
   }
 
-  function handleUndoIncome() {
-    void undoDeleteIncome();
-    setUndoIncomeVisible(false);
+  async function handleUndoIncome() {
+    try {
+      await undoDeleteIncome();
+      setUndoIncomeVisible(false);
+    } catch (error) {
+      showBanner(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo recuperar el ingreso. Intenta de nuevo.',
+        'error',
+      );
+    }
   }
 
   function openSheet(mode: SheetMode | null = null) {
     setSheetMode(mode);
     setAmount('');
+    setSubmissionError(null);
     setSheetVisible(true);
   }
 
@@ -205,6 +277,12 @@ export default function TodayScreen() {
             { backgroundColor: theme.colors.backgroundAccent },
           ]}
         />
+        <View
+          style={[
+            styles.blobSecondary,
+            { backgroundColor: theme.colors.backgroundAccentTwo },
+          ]}
+        />
       </View>
 
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -227,7 +305,8 @@ export default function TodayScreen() {
               <SuccessBanner
                 visible={Boolean(bannerMessage)}
                 message={bannerMessage}
-                onDismiss={() => setBannerMessage(null)}
+                variant={bannerTone}
+                onDismiss={dismissBanner}
               />
             </FadeInView>
           ) : null}
@@ -249,7 +328,41 @@ export default function TodayScreen() {
                   {longDateLabel(now)}
                 </Text>
               </View>
-              <StatusPill status={today.status} />
+              <View style={styles.headerActions}>
+                <StatusPill status={today.status} />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Ajustes"
+                  accessibilityHint="Abrir la configuración de la aplicación"
+                  hitSlop={8}
+                  onPress={() => router.push('/settings')}
+                  style={({ pressed }) => [
+                    styles.settingsButton,
+                    {
+                      backgroundColor: theme.colors.accentSoft,
+                      borderColor: theme.colors.accent,
+                      shadowColor: theme.colors.accent,
+                      opacity: pressed ? 0.8 : 1,
+                      transform: [
+                        {
+                          scale:
+                            pressed && !theme.reduceMotion ? 0.94 : 1,
+                        },
+                      ],
+                    },
+                  ]}
+                >
+                  <SymbolView
+                    name={{
+                      ios: 'gearshape.fill',
+                      android: 'settings',
+                      web: 'settings',
+                    }}
+                    tintColor={theme.colors.accent}
+                    size={21}
+                  />
+                </Pressable>
+              </View>
             </View>
           </FadeInView>
 
@@ -273,32 +386,6 @@ export default function TodayScreen() {
             <BusinessShortcutCard />
           </FadeInView>
 
-          {/* Tarjeta de Disponible hoy después de gastos si ya se gastó algo */}
-          {today.spentToday > 0 ? (
-            <FadeInView delay={160}>
-              <GlassCard contentStyle={{ gap: theme.spacing.xs }}>
-                <Text
-                  style={[styles.smallLabel, { color: theme.colors.textMuted }]}
-                >
-                  Disponible hoy después de tus gastos
-                </Text>
-                <Text
-                  style={[
-                    styles.remaining,
-                    {
-                      color:
-                        remainingToday < 0
-                          ? theme.colors.danger
-                          : theme.colors.text,
-                    },
-                  ]}
-                >
-                  {formatCOP(remainingToday)}
-                </Text>
-              </GlassCard>
-            </FadeInView>
-          ) : null}
-
           {/* Sección de Movimientos de Hoy */}
           <FadeInView delay={220}>
             <TodayMovementSection
@@ -309,23 +396,10 @@ export default function TodayScreen() {
             />
           </FadeInView>
 
-          {/* Resumen del mes */}
-          <FadeInView delay={280}>
-            <MonthlySummaryCard today={today} />
-          </FadeInView>
-
           <FadeInView delay={320}>
             <BalanceShortcutCard />
           </FadeInView>
 
-          {/* Accesos secundarios */}
-          <FadeInView delay={340} style={styles.footer}>
-            <PrimaryButton
-              label="Ajustes"
-              variant="ghost"
-              onPress={() => router.push('/settings')}
-            />
-          </FadeInView>
         </ScrollView>
       </SafeAreaView>
 
@@ -339,19 +413,35 @@ export default function TodayScreen() {
       <ExpenseSheet
         visible={sheetVisible}
         initialMode={sheetMode}
-        onClose={() => setSheetVisible(false)}
+        onClose={() => {
+          setSubmissionError(null);
+          setSheetVisible(false);
+        }}
         onSaveExpense={handleAddExpense}
         onSaveIncome={handleAddIncome}
         amount={amount}
-        onAmountChange={setAmount}
+        onAmountChange={(value) => {
+          setAmount(value);
+          setSubmissionError(null);
+        }}
         category={category}
         onCategoryChange={setCategory}
         saving={saving}
+        errorMessage={submissionError}
+        onDismissError={() => setSubmissionError(null)}
       />
 
       {/* Banner de deshacer gasto borrado */}
       {undoExpenseVisible && lastDeleted ? (
-        <View style={styles.undoBanner}>
+        <View
+          style={[
+            styles.undoBanner,
+            {
+              backgroundColor: theme.colors.surfaceStrong,
+              borderColor: theme.colors.separator,
+            },
+          ]}
+        >
           <Text style={[styles.undoText, { color: theme.colors.text }]}>
             Gasto eliminado
           </Text>
@@ -366,7 +456,15 @@ export default function TodayScreen() {
 
       {/* Banner de deshacer ingreso borrado */}
       {undoIncomeVisible && lastDeletedIncome ? (
-        <View style={styles.undoBanner}>
+        <View
+          style={[
+            styles.undoBanner,
+            {
+              backgroundColor: theme.colors.surfaceStrong,
+              borderColor: theme.colors.separator,
+            },
+          ]}
+        >
           <Text style={[styles.undoText, { color: theme.colors.text }]}>
             Ingreso eliminado
           </Text>
@@ -401,11 +499,37 @@ const styles = StyleSheet.create({
     right: -120,
     opacity: 0.9,
   },
+  blobSecondary: {
+    position: 'absolute',
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    bottom: -100,
+    left: -130,
+    opacity: 0.8,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 16,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  settingsButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   headerText: {
     flex: 1,
@@ -424,30 +548,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.4,
   },
-  smallLabel: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '600',
-  },
-  remaining: {
-    fontSize: 32,
-    lineHeight: 38,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
-  },
-  footer: {
-    gap: 10,
-    marginTop: 'auto',
-  },
   undoBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: '#121722',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.1)',
   },
   undoText: {
     fontSize: 15,

@@ -180,12 +180,30 @@ export const MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 7,
+    up: async (db) => {
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS business_settings (
+          id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1),
+          goal_amount INTEGER NOT NULL
+            CHECK (typeof(goal_amount) = 'integer' AND goal_amount >= 0),
+          goal_period TEXT NOT NULL
+            CHECK (goal_period IN ('daily', 'monthly', 'yearly'))
+        );
+
+        INSERT OR IGNORE INTO business_settings (id, goal_amount, goal_period)
+        SELECT 1, COALESCE(SUM(daily_goal), 0), 'daily'
+        FROM business_item;
+      `);
+    },
+  },
 ];
 
 export const LATEST_DATABASE_VERSION =
   Math.max(
     MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0,
-    6,
+    7,
   );
 
 /**

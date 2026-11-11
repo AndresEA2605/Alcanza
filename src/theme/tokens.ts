@@ -24,8 +24,10 @@ export interface ThemeColors {
   onAccent: string;
   success: string;
   successSoft: string;
+  onSuccess: string;
   warning: string;
   warningSoft: string;
+  onWarning: string;
   danger: string;
   dangerSoft: string;
   inputBackground: string;
@@ -49,10 +51,12 @@ export const palettes: Record<ThemeMode, ThemeColors> = {
     accent: '#0A6CFF',
     accentSoft: 'rgba(10, 108, 255, 0.12)',
     onAccent: '#FFFFFF',
-    success: '#129C63',
+    success: '#087A4B',
     successSoft: 'rgba(18, 156, 99, 0.14)',
+    onSuccess: '#FFFFFF',
     warning: '#C77700',
     warningSoft: 'rgba(199, 119, 0, 0.14)',
+    onWarning: '#2D1A00',
     danger: '#D92D20',
     dangerSoft: 'rgba(217, 45, 32, 0.12)',
     inputBackground: 'rgba(255, 255, 255, 0.88)',
@@ -76,8 +80,10 @@ export const palettes: Record<ThemeMode, ThemeColors> = {
     onAccent: '#04111F',
     success: '#3DDC97',
     successSoft: 'rgba(61, 220, 151, 0.16)',
+    onSuccess: '#04111F',
     warning: '#FFB340',
     warningSoft: 'rgba(255, 179, 64, 0.16)',
+    onWarning: '#04111F',
     danger: '#FF6B6B',
     dangerSoft: 'rgba(255, 107, 107, 0.16)',
     inputBackground: 'rgba(255, 255, 255, 0.06)',

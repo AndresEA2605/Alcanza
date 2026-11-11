@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { daysLabel, daysLeftSentence } from '../../domain/labels';
+import { daysLeftSentence } from '../../domain/labels';
 import { formatCOP } from '../../domain/money';
 import type { MarginMode, SpendingMarginResult } from '../../domain/spendingMargin';
 import type { CalcTodayResult, Expense, IncomeEntry } from '../../domain/budget';
@@ -10,6 +10,7 @@ import { AnimatedNumber } from '../AnimatedNumber';
 import { EmptyState } from '../EmptyState';
 import { ExpenseItem } from '../ExpenseItem';
 import { GlassCard } from '../GlassCard';
+import { HapticPressable as Pressable } from '../HapticPressable';
 import { IncomeItem } from '../IncomeItem';
 import { SpendingMarginBar } from '../SpendingMarginBar';
 
@@ -32,31 +33,37 @@ export function DashboardBudgetCard({
 }) {
   const theme = useTheme();
   const available =
-    mode === 'hoy'
-      ? Math.max(0, Math.round(margin.limit))
-      : Math.max(0, Math.round(margin.remaining));
-  const title = {
-    hoy: 'Puedes gastar hoy',
-    semana: 'Disponible esta semana',
-    mes: 'Disponible este mes',
-  }[mode];
-  const availableLabel = {
-    hoy: 'Disponible para hoy',
-    semana: 'Disponible el resto de la semana',
-    mes: 'Disponible el resto del mes',
-  }[mode];
+    mode === 'mes'
+      ? Math.round(today.monthLeft)
+      : Math.round(margin.remaining);
+  const isOverLimit = available < 0;
+  const displayedAmount = Math.abs(available);
+  const availableLabel = isOverLimit
+    ? 'Exceso'
+    : mode === 'hoy'
+      ? 'Disponible hoy'
+      : mode === 'semana'
+        ? 'Disponible esta semana'
+        : 'Disponible del mes';
   const hint =
     mode === 'hoy'
-      ? `${daysLeftSentence(today.daysLeft)} en el mes`
+      ? `${daysLeftSentence(today.daysLeft)} · Tope ${formatCOP(Math.round(margin.limit))}`
       : mode === 'semana'
-        ? `${margin.daysLeft} días restantes · límite ${formatCOP(Math.round(margin.limit))}`
-        : `De ${formatCOP(Math.round(margin.limit))} de presupuesto variable`;
+        ? `${margin.daysLeft} días · Tope ${formatCOP(Math.round(margin.limit))}`
+        : `${margin.percentage}% usado`;
 
   return (
-    <GlassCard contentStyle={styles.budgetCard}>
-      <Text style={[styles.budgetTitle, { color: theme.colors.textMuted }]}>
-        {title}
-      </Text>
+    <GlassCard
+      intensity={48}
+      style={[
+        styles.budgetCardShell,
+        {
+          backgroundColor: theme.colors.accentSoft,
+          borderColor: theme.colors.accent,
+        },
+      ]}
+      contentStyle={styles.budgetCard}
+    >
       <View
         style={[
           styles.periodToggle,
@@ -74,9 +81,16 @@ export function DashboardBudgetCard({
               accessibilityState={{ selected }}
               accessibilityLabel={`Ver presupuesto para ${label.toLowerCase()}`}
               onPress={() => onModeChange(option)}
-              style={[
+              style={({ pressed }) => [
                 styles.periodButton,
-                selected && { backgroundColor: theme.colors.surfaceStrong },
+                selected && {
+                  backgroundColor: theme.colors.accent,
+                },
+                pressed &&
+                  !theme.reduceMotion && {
+                    transform: [{ scale: 0.97 }],
+                    opacity: 0.85,
+                  },
               ]}
             >
               <Text
@@ -84,7 +98,7 @@ export function DashboardBudgetCard({
                   styles.periodButtonText,
                   {
                     color: selected
-                      ? theme.colors.text
+                      ? theme.colors.onAccent
                       : theme.colors.textMuted,
                     fontWeight: selected ? '700' : '500',
                   },
@@ -96,14 +110,17 @@ export function DashboardBudgetCard({
           );
         })}
       </View>
-      <Text style={[styles.availableLabel, { color: theme.colors.textSecondary }]}>
+      <Text style={[styles.availableLabel, { color: theme.colors.accent }]}>
         {availableLabel}
       </Text>
       <AnimatedNumber
-        value={available}
+        value={displayedAmount}
         format={(value) => formatCOP(Math.round(value))}
-        accessibilityLabel={`${title} ${formatCOP(available)}`}
-        style={[styles.number, { color: theme.colors.text }]}
+        accessibilityLabel={`${availableLabel} ${formatCOP(displayedAmount)}`}
+        style={[
+          styles.number,
+          { color: isOverLimit ? theme.colors.danger : theme.colors.text },
+        ]}
       />
       <Text style={[styles.hint, { color: theme.colors.textSecondary }]}>
         {hint}
@@ -122,120 +139,84 @@ export function RegisterMovementCard({
 }: {
   onPress: () => void;
 }) {
-  const theme = useTheme();
-
   return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Registrar un movimiento"
-        onPress={onPress}
-        style={[
-          styles.quickAction,
-          {
-            backgroundColor: theme.colors.inputBackground,
-            borderColor: theme.colors.separator,
-          },
-        ]}
-      >
-        <View style={styles.actionTextGroup}>
-          <Text style={[styles.quickActionTitle, { color: theme.colors.text }]}>
-            Registrar movimiento
-          </Text>
-          <Text style={[styles.quickActionSubtitle, { color: theme.colors.textMuted }]}>
-            Elige gasto o ingreso
-          </Text>
-        </View>
-        <Text style={[styles.quickActionArrow, { color: theme.colors.textMuted }]}>
-          →
-        </Text>
-      </Pressable>
+    <DashboardShortcutCard
+      accessibilityLabel="Registrar un movimiento"
+      label="Registrar"
+      onPress={onPress}
+    />
   );
 }
 
 export function BusinessShortcutCard() {
-  const theme = useTheme();
-
   return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Abrir Mi negocio"
-        accessibilityHint="Ver productos, ventas y metas de tu negocio"
-        onPress={() => router.push('/negocio' as never)}
-        style={({ pressed }) => [
-          styles.businessCard,
-          {
-            backgroundColor: theme.colors.accentSoft,
-            borderColor: theme.colors.accent,
-            transform: [{ scale: pressed ? 0.99 : 1 }],
-          },
-        ]}
-      >
-        <View style={styles.businessCardContent}>
-          <Text style={[styles.businessTitle, { color: theme.colors.text }]}>
-            Mi negocio
-          </Text>
-        </View>
-        <View
-          style={[
-            styles.businessArrowWrap,
-            { backgroundColor: theme.colors.accent },
-          ]}
-        >
-          <Text style={[styles.businessArrow, { color: theme.colors.onAccent }]}>
-            →
-          </Text>
-        </View>
-      </Pressable>
+    <DashboardShortcutCard
+      accessibilityLabel="Abrir Mi negocio"
+      accessibilityHint="Ver productos, ventas y metas de tu negocio"
+      label="Mi negocio"
+      onPress={() => router.push('/negocio' as never)}
+    />
   );
 }
 
 export function BalanceShortcutCard() {
+  return (
+    <DashboardShortcutCard
+      accessibilityLabel="Ver balance y margen"
+      accessibilityHint="Consultar tu presupuesto y gastos"
+      label="Balance y margen"
+      onPress={() => router.push('/balance')}
+    />
+  );
+}
+
+function DashboardShortcutCard({
+  accessibilityLabel,
+  accessibilityHint,
+  label,
+  onPress,
+}: {
+  accessibilityLabel: string;
+  accessibilityHint?: string;
+  label: string;
+  onPress: () => void;
+}) {
   const theme = useTheme();
 
   return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Ver balance y margen"
-        accessibilityHint="Consultar tu proyección mensual y simular gastos"
-        onPress={() => router.push('/balance')}
-        style={({ pressed }) => [
-          styles.balanceCard,
-          {
-            backgroundColor: theme.colors.accent,
-            borderColor: theme.colors.accent,
-            transform: [{ scale: pressed ? 0.99 : 1 }],
-          },
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.shortcutCard,
+        {
+          backgroundColor: theme.colors.accentSoft,
+          borderColor: theme.colors.accent,
+          transform: [
+            { scale: pressed && !theme.reduceMotion ? 0.99 : 1 },
+          ],
+        },
+      ]}
+    >
+      <Text style={[styles.shortcutTitle, { color: theme.colors.text }]}>
+        {label}
+      </Text>
+      <View
+        style={[
+          styles.shortcutArrowWrap,
+          { backgroundColor: theme.colors.accent },
         ]}
       >
-        <View style={styles.balanceCardContent}>
-          <Text
-            style={[
-              styles.balanceCardTitle,
-              { color: theme.colors.onAccent },
-            ]}
-          >
-            Balance y margen
-          </Text>
-          <Text
-            style={[
-              styles.balanceCardSubtitle,
-              { color: theme.colors.onAccent },
-            ]}
-          >
-            Proyección mensual y simulador
-          </Text>
-        </View>
-        <View
-          style={[
-            styles.balanceArrowWrap,
-            { backgroundColor: theme.colors.surface },
-          ]}
+        <Text
+          style={[styles.shortcutArrow, { color: theme.colors.onAccent }]}
+          accessibilityElementsHidden
         >
-          <Text style={[styles.balanceArrow, { color: theme.colors.accent }]}>
-            →
-          </Text>
-        </View>
-      </Pressable>
+          →
+        </Text>
+      </View>
+    </Pressable>
   );
 }
 
@@ -286,65 +267,14 @@ export function TodayMovementSection({
   );
 }
 
-export function MonthlySummaryCard({ today }: { today: CalcTodayResult }) {
-  const theme = useTheme();
-  const rows = [
-    { label: 'Queda del mes', value: formatCOP(Math.round(today.monthLeft)), strong: true },
-    ...(today.incomeAdditionalMonth > 0
-      ? [{
-          label: 'Ingresos extras este mes',
-          value: `+${formatCOP(Math.round(today.incomeAdditionalMonth))}`,
-          valueColor: theme.colors.success,
-        }]
-      : []),
-    { label: 'Gastado hoy', value: formatCOP(Math.round(today.spentToday)) },
-    { label: 'Gastado en el mes', value: formatCOP(Math.round(today.spentMonth)) },
-    { label: 'Días restantes', value: daysLabel(today.daysLeft) },
-  ];
-
-  return (
-    <GlassCard contentStyle={styles.summaryCard}>
-      {rows.map((row, index) => (
-        <View key={row.label} style={styles.summaryGroup}>
-          {index > 0 ? (
-            <View
-              style={[styles.divider, { backgroundColor: theme.colors.separator }]}
-            />
-          ) : null}
-          <View style={styles.summaryRow}>
-            <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>
-              {row.label}
-            </Text>
-            <Text
-              style={[
-                styles.summaryValue,
-                {
-                  color:
-                    row.valueColor ??
-                    (row.strong ? theme.colors.text : theme.colors.textSecondary),
-                  fontWeight: row.strong ? '700' : '600',
-                },
-              ]}
-            >
-              {row.value}
-            </Text>
-          </View>
-        </View>
-      ))}
-    </GlassCard>
-  );
-}
-
 const styles = StyleSheet.create({
+  budgetCardShell: {
+    borderRadius: 20,
+  },
   budgetCard: {
     alignItems: 'stretch',
-    paddingVertical: 24,
+    padding: 18,
     gap: 14,
-  },
-  budgetTitle: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: '600',
   },
   periodToggle: {
     width: '100%',
@@ -387,35 +317,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 8,
   },
-  quickAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    borderRadius: 18,
-    borderWidth: 1,
-    gap: 16,
-    minHeight: 72,
-  },
-  actionTextGroup: {
-    flex: 1,
-    gap: 2,
-  },
-  quickActionTitle: {
-    fontSize: 17,
-    lineHeight: 22,
-    fontWeight: '700',
-  },
-  quickActionSubtitle: {
-    fontSize: 14,
-    lineHeight: 19,
-  },
-  quickActionArrow: {
-    fontSize: 24,
-    lineHeight: 28,
-    fontWeight: '500',
-  },
-  businessCard: {
+  shortcutCard: {
     minHeight: 88,
     flexDirection: 'row',
     alignItems: 'center',
@@ -425,61 +327,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 16,
   },
-  businessCardContent: {
+  shortcutTitle: {
     flex: 1,
-    justifyContent: 'center',
-  },
-  businessTitle: {
     fontSize: 20,
     lineHeight: 26,
     fontWeight: '800',
   },
-  businessArrowWrap: {
+  shortcutArrowWrap: {
     width: 44,
     height: 44,
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  businessArrow: {
+  shortcutArrow: {
     fontSize: 24,
     lineHeight: 28,
-    fontWeight: '600',
-  },
-  balanceCard: {
-    minHeight: 92,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 18,
-    borderRadius: 20,
-    borderWidth: 1,
-    gap: 16,
-  },
-  balanceCardContent: {
-    flex: 1,
-    gap: 4,
-  },
-  balanceCardTitle: {
-    fontSize: 18,
-    lineHeight: 24,
-    fontWeight: '800',
-  },
-  balanceCardSubtitle: {
-    fontSize: 13,
-    lineHeight: 18,
-    opacity: 0.88,
-  },
-  balanceArrowWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  balanceArrow: {
-    fontSize: 23,
-    lineHeight: 27,
     fontWeight: '600',
   },
   movementSection: {
@@ -493,31 +356,5 @@ const styles = StyleSheet.create({
   },
   movementList: {
     gap: 10,
-  },
-  summaryCard: {
-    gap: 14,
-  },
-  summaryGroup: {
-    gap: 14,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 16,
-  },
-  summaryLabel: {
-    flex: 1,
-    fontSize: 15,
-    lineHeight: 20,
-  },
-  summaryValue: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontVariant: ['tabular-nums'],
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    width: '100%',
   },
 });

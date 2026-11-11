@@ -1,6 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { useTheme } from '../theme';
+import { HapticPressable as Pressable } from './HapticPressable';
 
 interface SettingsRowProps {
   title: string;
@@ -41,7 +42,6 @@ export function SettingsRow({
         <Text
           style={[styles.title, { color: theme.colors.text }]}
           maxFontSizeMultiplier={1.3}
-          numberOfLines={1}
         >
           {title}
         </Text>
@@ -49,7 +49,6 @@ export function SettingsRow({
           <Text
             style={[styles.subtitle, { color: theme.colors.textSecondary }]}
             maxFontSizeMultiplier={1.2}
-            numberOfLines={1}
           >
             {subtitle}
           </Text>
@@ -71,7 +70,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },

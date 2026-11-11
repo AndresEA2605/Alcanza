@@ -47,14 +47,21 @@ describe('migraciones de la base de datos', () => {
     const tables = await testDb.db.getAllAsync<{ name: string }>(
       `SELECT name
        FROM sqlite_master
-       WHERE type = 'table' AND name IN ('month_config', 'expense')
+       WHERE type = 'table'
+         AND name IN ('month_config', 'expense', 'business_settings')
        ORDER BY name`,
     );
 
     expect(tables.map((table) => table.name)).toEqual([
+      'business_settings',
       'expense',
       'month_config',
     ]);
+    await expect(
+      testDb.db.getFirstAsync(
+        'SELECT goal_amount, goal_period FROM business_settings WHERE id = 1',
+      ),
+    ).resolves.toEqual({ goal_amount: 0, goal_period: 'daily' });
   });
 
   it('crea el índice en ts', async () => {
@@ -130,6 +137,12 @@ describe('migraciones de la base de datos', () => {
       description: '',
       image_uri: null,
     });
+
+    await expect(
+      testDb.db.getFirstAsync(
+        'SELECT goal_amount, goal_period FROM business_settings WHERE id = 1',
+      ),
+    ).resolves.toEqual({ goal_amount: 25000, goal_period: 'daily' });
   });
 
   it('rechaza una base de datos más nueva que la app', async () => {

@@ -1,18 +1,19 @@
 import { useEffect, useState } from 'react';
 import {
   Animated,
-  Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
 import { useTheme } from '../theme';
+import { HapticPressable as Pressable } from './HapticPressable';
 
 interface SuccessBannerProps {
   visible: boolean;
   message: string;
   onDismiss: () => void;
+  variant?: 'success' | 'error';
 }
 
 /**
@@ -24,8 +25,21 @@ export function SuccessBanner({
   visible,
   message,
   onDismiss,
+  variant = 'success',
 }: SuccessBannerProps) {
   const theme = useTheme();
+  const tone =
+    variant === 'success'
+      ? {
+          background: theme.colors.successSoft,
+          foreground: theme.colors.success,
+          icon: '✔',
+        }
+      : {
+          background: theme.colors.dangerSoft,
+          foreground: theme.colors.danger,
+          icon: '!',
+        };
   const [opacity] = useState(() => new Animated.Value(visible ? 1 : 0));
   const [translateY] = useState(() => new Animated.Value(visible ? 0 : 20));
 
@@ -58,7 +72,7 @@ export function SuccessBanner({
   const bannerStyle = [
     styles.banner,
     {
-      backgroundColor: theme.colors.successSoft,
+      backgroundColor: tone.background,
       opacity,
       transform: [{ translateY }],
     },
@@ -68,22 +82,20 @@ export function SuccessBanner({
     <Animated.View style={bannerStyle}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={message}
+        accessibilityLabel={`${message}. Toca para cerrar`}
         onPress={onDismiss}
         style={StyleSheet.absoluteFill}
       />
       <View style={styles.content}>
-        <Text style={[styles.icon, { color: theme.colors.success }]}>
-          ✔
-        </Text>
+        <Text style={[styles.icon, { color: tone.foreground }]}>{tone.icon}</Text>
         <Text style={[styles.text, { color: theme.colors.text }]}>
           {message}
         </Text>
         <Text
-          style={[styles.dismiss, { color: theme.colors.success }]}
+          style={[styles.dismiss, { color: tone.foreground }]}
           maxFontSizeMultiplier={1.2}
         >
-          Despido
+          Cerrar
         </Text>
       </View>
     </Animated.View>

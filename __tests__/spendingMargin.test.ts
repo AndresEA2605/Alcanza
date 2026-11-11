@@ -236,7 +236,7 @@ describe('calcSpendingMargin: modo mes', () => {
 describe('calcSpendingMargin: modo semana', () => {
   const JAN_15_2026 = at(2026, 0, 15, 12);
 
-  it('calcula el disponible proporcional de lunes a domingo y cuenta ingresos anteriores', () => {
+  it('calcula el disponible proporcional y cuenta ingresos anteriores y de esta semana', () => {
     const expenses = [
       makeExpense({ amount: 500_000, ts: at(2026, 0, 5) }),
       makeExpense({ amount: 100_000, ts: at(2026, 0, 13) }),
@@ -266,7 +266,9 @@ describe('calcSpendingMargin: modo semana', () => {
     );
 
     expect(result.mode).toBe('semana');
-    expect(result.limit).toBeCloseTo((3_000_000 + 50_000 - 1_000_000 - 500_000) / 20 * 7);
+    expect(result.limit).toBeCloseTo(
+      ((3_000_000 + 50_000 - 1_000_000 - 500_000) / 20) * 7 + 200_000,
+    );
     expect(result.spent).toBe(200_000);
     expect(result.remaining).toBeCloseTo(result.limit - 200_000);
     expect(result.daysLeft).toBe(4);

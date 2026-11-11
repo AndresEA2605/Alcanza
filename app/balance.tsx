@@ -18,10 +18,9 @@ import { useTheme } from '../src/theme';
 import { BackButton } from '../src/ui/BackButton';
 import { FadeInView } from '../src/ui/FadeInView';
 import { GlassCard } from '../src/ui/GlassCard';
+import { HapticPressable as Pressable } from '../src/ui/HapticPressable';
 import { LoadingState } from '../src/ui/LoadingState';
-import { PrimaryButton } from '../src/ui/PrimaryButton';
 import { SpendingMarginBar } from '../src/ui/SpendingMarginBar';
-import { ImpactSimulator } from '../src/ui/balance/ImpactSimulator';
 
 export default function BalanceScreen() {
   const theme = useTheme();
@@ -35,6 +34,7 @@ export default function BalanceScreen() {
   const initializeBudget = useBudgetStore((state) => state.initialize);
 
   const [now] = useState(Date.now);
+  const [monthlyDetailsOpen, setMonthlyDetailsOpen] = useState(false);
 
   useEffect(() => {
     if (budgetStatus === 'idle') {
@@ -84,7 +84,7 @@ export default function BalanceScreen() {
             {
               padding: theme.spacing.xl,
               paddingBottom: theme.spacing.xxxl * 2,
-              gap: theme.spacing.lg,
+              gap: theme.spacing.xl,
             },
           ]}
           showsVerticalScrollIndicator={false}
@@ -93,12 +93,6 @@ export default function BalanceScreen() {
           <FadeInView delay={0}>
             <View style={styles.navBar}>
               <BackButton onPress={goBack} />
-              <PrimaryButton
-                label="Registrar gasto"
-                variant="ghost"
-                onPress={goBack}
-                style={styles.navAction}
-              />
             </View>
           </FadeInView>
 
@@ -106,19 +100,10 @@ export default function BalanceScreen() {
           <FadeInView delay={40}>
             <View style={styles.header}>
               <Text
-                style={[styles.overline, { color: theme.colors.accent }]}
-                maxFontSizeMultiplier={1.3}
-              >
-                INTELIGENCIA FINANCIERA
-              </Text>
-              <Text
                 accessibilityRole="header"
                 style={[styles.title, { color: theme.colors.text }]}
               >
-                Balance y Margen
-              </Text>
-              <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-                Proyección y control proporcional de tus gastos
+                Balance
               </Text>
             </View>
           </FadeInView>
@@ -131,103 +116,117 @@ export default function BalanceScreen() {
             />
           </FadeInView>
 
-          {/* Simulador de impacto interactivo */}
+          {/* Resumen mensual desplegable */}
           <FadeInView delay={140}>
-            <ImpactSimulator
-              income={config.income}
-              fixed={config.fixed}
-              expenses={expenses}
-              incomes={incomes}
-              today={today}
-              now={now}
-            />
-          </FadeInView>
-
-          {/* Desglose mensual detallado */}
-          <FadeInView delay={190}>
-            <GlassCard contentStyle={{ gap: theme.spacing.md }}>
-              <Text
-                style={[styles.sectionTitle, { color: theme.colors.text }]}
-                maxFontSizeMultiplier={1.3}
+            <GlassCard contentStyle={{ gap: theme.spacing.lg }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: monthlyDetailsOpen }}
+                accessibilityLabel={`Detalle del mes. ${
+                  today.monthLeft < 0 ? 'Déficit' : 'Disponible'
+                } ${formatCOP(Math.abs(Math.round(today.monthLeft)))}`}
+                onPress={() => setMonthlyDetailsOpen((open) => !open)}
+                style={[
+                  styles.monthSummary,
+                  {
+                    backgroundColor: theme.colors.inputBackground,
+                    borderColor: theme.colors.separator,
+                  },
+                ]}
               >
-                Resumen del mes ({today.daysLeft} días restantes)
-              </Text>
+                <View style={styles.monthSummaryText}>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                    Mes
+                  </Text>
+                  <Text style={[styles.rowItemLabel, { color: theme.colors.textSecondary }]}>
+                    {today.monthLeft < 0 ? 'Déficit' : 'Disponible'}
+                  </Text>
+                </View>
+                <Text
+                  style={[
+                    styles.monthSummaryAmount,
+                    {
+                      color:
+                        today.monthLeft < 0
+                          ? theme.colors.danger
+                          : theme.colors.success,
+                    },
+                  ]}
+                >
+                  {formatCOP(Math.abs(Math.round(today.monthLeft)))}
+                </Text>
+                <Text style={[styles.monthSummaryArrow, { color: theme.colors.accent }]}>
+                  {monthlyDetailsOpen ? '−' : '+'}
+                </Text>
+              </Pressable>
 
-              <RowItem
-                label="Ingreso base mensual"
-                value={formatCOP(config.income)}
-              />
-              {today.incomeAdditionalMonth > 0 ? (
-                <RowItem
-                  label="Ingresos adicionales del mes"
-                  value={`+${formatCOP(Math.round(today.incomeAdditionalMonth))}`}
-                  valueColor={theme.colors.success}
-                />
+              {monthlyDetailsOpen ? (
+                <>
+                  <RowItem
+                    label="Ingreso base"
+                    value={formatCOP(config.income)}
+                  />
+                  {today.incomeAdditionalMonth > 0 ? (
+                    <RowItem
+                      label="Ingresos extra"
+                      value={`+${formatCOP(Math.round(today.incomeAdditionalMonth))}`}
+                      valueColor={theme.colors.success}
+                    />
+                  ) : null}
+                  {today.incomeAdditionalMonth > 0 ? (
+                    <RowItem
+                      label="Ingreso total"
+                      value={formatCOP(Math.round(today.totalIncome))}
+                      strong
+                    />
+                  ) : null}
+                  <RowItem
+                    label="Reservado para gastos fijos"
+                    value={formatCOP(config.fixed)}
+                  />
+                  <RowItem
+                    label="Disponible tras gastos fijos"
+                    value={formatCOP(Math.max(0, today.totalIncome - config.fixed))}
+                    strong
+                  />
+                  <View
+                    style={[
+                      styles.divider,
+                      { backgroundColor: theme.colors.separator },
+                    ]}
+                  />
+                  <RowItem
+                    label="Gastos registrados este mes"
+                    value={formatCOP(Math.round(today.spentMonth))}
+                  />
+                  <RowItem
+                    label={today.monthLeft < 0 ? 'Déficit' : 'Disponible'}
+                    value={formatCOP(Math.abs(Math.round(today.monthLeft)))}
+                    strong
+                    valueColor={
+                      today.monthLeft < 0
+                        ? theme.colors.danger
+                        : theme.colors.success
+                    }
+                  />
+                  <View
+                    style={[
+                      styles.divider,
+                      { backgroundColor: theme.colors.separator },
+                    ]}
+                  />
+                  <RowItem
+                    label="Hoy"
+                    value={formatCOP(Math.max(0, Math.round(today.daily)))}
+                    strong
+                  />
+                  <RowItem
+                    label="Mañana"
+                    value={formatCOP(Math.max(0, Math.round(today.tomorrow)))}
+                  />
+                </>
               ) : null}
-              {today.incomeAdditionalMonth > 0 ? (
-                <RowItem
-                  label="Ingreso total del mes"
-                  value={formatCOP(Math.round(today.totalIncome))}
-                  strong
-                />
-              ) : null}
-              <RowItem
-                label="Gastos fijos comprometidos"
-                value={formatCOP(config.fixed)}
-              />
-              <RowItem
-                label="Presupuesto variable disponible"
-                value={formatCOP(Math.max(0, today.totalIncome - config.fixed))}
-                strong
-              />
-
-              <View
-                style={[
-                  styles.divider,
-                  { backgroundColor: theme.colors.separator },
-                ]}
-              />
-
-              <RowItem
-                label="Gastos acumulados del mes"
-                value={formatCOP(Math.round(today.spentMonth))}
-              />
-              <RowItem
-                label="Disponible total para lo que queda"
-                value={formatCOP(Math.max(0, Math.round(today.monthLeft)))}
-                strong
-                valueColor={
-                  today.monthLeft < 0
-                    ? theme.colors.danger
-                    : theme.colors.success
-                }
-              />
-
-              <View
-                style={[
-                  styles.divider,
-                  { backgroundColor: theme.colors.separator },
-                ]}
-              />
-
-              <RowItem
-                label="Número diario para hoy"
-                value={formatCOP(Math.max(0, Math.round(today.daily)))}
-                strong
-              />
-              <RowItem
-                label="Proyección diaria para mañana"
-                value={formatCOP(Math.max(0, Math.round(today.tomorrow)))}
-              />
             </GlassCard>
-          </FadeInView>
-
-          {/* Botón inferior para volver */}
-          <FadeInView delay={230} style={styles.footer}>
-            <PrimaryButton
-              label="Volver a la pantalla principal"
-              onPress={goBack}
-            />
           </FadeInView>
         </ScrollView>
       </SafeAreaView>
@@ -288,26 +287,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
   },
-  navAction: {
-    minWidth: 100,
-  },
   header: {
     gap: 4,
-  },
-  overline: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.8,
   },
   title: {
     fontSize: 32,
     lineHeight: 38,
     fontWeight: '800',
     letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 16,
-    lineHeight: 22,
   },
   sectionTitle: {
     fontSize: 17,
@@ -336,8 +323,31 @@ const styles = StyleSheet.create({
     width: '100%',
     marginVertical: 2,
   },
-  footer: {
-    width: '100%',
-    marginTop: 8,
+  monthSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: 68,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderRadius: 18,
+  },
+  monthSummaryText: {
+    flex: 1,
+    gap: 2,
+  },
+  monthSummaryAmount: {
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  monthSummaryArrow: {
+    width: 24,
+    textAlign: 'right',
+    fontSize: 22,
+    lineHeight: 26,
+    fontWeight: '600',
   },
 });

@@ -1,19 +1,53 @@
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 
 import { useTheme } from '../theme';
+import { tapFeedback } from './haptics';
 
 export function BackButton({ onPress }: { onPress: () => void }) {
   const theme = useTheme();
+  const [isHandlingBack, setIsHandlingBack] = useState(false);
+  const handlingBack = useRef(false);
+  const unlockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (unlockTimer.current) {
+        clearTimeout(unlockTimer.current);
+      }
+    },
+    [],
+  );
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Volver"
-      onPress={onPress}
+      accessibilityState={{ disabled: isHandlingBack }}
+      disabled={isHandlingBack}
+      onPress={() => {
+        if (handlingBack.current) return;
+
+        handlingBack.current = true;
+        setIsHandlingBack(true);
+        unlockTimer.current = setTimeout(() => {
+          handlingBack.current = false;
+          setIsHandlingBack(false);
+          unlockTimer.current = null;
+        }, 500);
+
+        tapFeedback(!theme.reduceMotion);
+        onPress();
+      }}
       hitSlop={12}
       style={({ pressed }) => [
         styles.button,
-        { opacity: pressed ? 0.55 : 1 },
+        {
+          opacity: isHandlingBack ? 0.5 : pressed ? 0.65 : 1,
+          transform: [
+            { translateX: pressed && !theme.reduceMotion ? -2 : 0 },
+          ],
+        },
       ]}
     >
       <Text

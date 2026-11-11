@@ -3,7 +3,6 @@ import { useEffect, useState, useRef } from 'react';
 import {
   Alert,
   Platform,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -15,16 +14,13 @@ import { useTheme } from '../../../src/theme';
 import { BackButton } from '../../../src/ui/BackButton';
 import { FadeInView } from '../../../src/ui/FadeInView';
 import { GlassCard } from '../../../src/ui/GlassCard';
+import { HapticPressable as Pressable } from '../../../src/ui/HapticPressable';
 import { LoadingState } from '../../../src/ui/LoadingState';
 import { MoneyInput } from '../../../src/ui/MoneyInput';
 import { PrimaryButton } from '../../../src/ui/PrimaryButton';
 import { Screen } from '../../../src/ui/Screen';
 import { SecureProductImage } from '../../../src/ui/business/SecureProductImage';
-import {
-  normalizeBusinessGoal,
-  type BusinessGoalPeriod,
-  type BusinessItem,
-} from '../../../src/domain/business';
+import type { BusinessItem } from '../../../src/domain/business';
 
 type BusinessFormType = 'product' | 'service';
 
@@ -108,8 +104,6 @@ function EditForm({
   const [quantity, setQuantity] = useState(item.quantity);
   const [pricePerUnit, setPricePerUnit] = useState(item.pricePerUnit);
   const [investment, setInvestment] = useState(item.investment);
-  const [goalAmount, setGoalAmount] = useState(item.goalAmount);
-  const [goalPeriod, setGoalPeriod] = useState<BusinessGoalPeriod>(item.goalPeriod);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorState] = useState<string | null>(null);
 
@@ -117,8 +111,6 @@ function EditForm({
   const quantityRef = useRef<number>(item.quantity);
   const priceRef = useRef<number>(item.pricePerUnit);
   const investmentRef = useRef<number>(item.investment);
-  const goalAmountRef = useRef<number>(item.goalAmount);
-  const goalPeriodRef = useRef<BusinessGoalPeriod>(item.goalPeriod);
 
   function goBack() {
     if (router.canGoBack()) {
@@ -153,12 +145,6 @@ function EditForm({
         quantity: quantityRef.current,
         pricePerUnit: priceRef.current,
         investment: type === 'product' ? investmentRef.current : 0,
-        dailyGoal: normalizeBusinessGoal(
-          goalAmountRef.current,
-          goalPeriodRef.current,
-        ),
-        goalAmount: goalAmountRef.current,
-        goalPeriod: goalPeriodRef.current,
       });
       router.replace('/negocio');
     } catch {
@@ -278,7 +264,7 @@ function EditForm({
 
             <View style={s.fieldGroup}>
               <Text style={[s.fieldLabel, { color: theme.colors.textSecondary }]}>
-                Cantidad
+                Cantidad total
               </Text>
               <View style={s.inputContainer}>
                 <TextInput
@@ -350,66 +336,6 @@ function EditForm({
                 </View>
               </View>
             )}
-
-            <View style={s.fieldGroup}>
-              <Text style={[s.fieldLabel, { color: theme.colors.textSecondary }]}>
-                Meta de ganancia neta
-              </Text>
-              <View style={s.goalPeriodRow}>
-                {([
-                  ['daily', 'Diaria'],
-                  ['monthly', 'Mensual'],
-                  ['yearly', 'Anual'],
-                ] as const).map(([period, label]) => {
-                  const selected = goalPeriod === period;
-                  return (
-                    <Pressable
-                      key={period}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected }}
-                      onPress={() => {
-                        setGoalPeriod(period);
-                        goalPeriodRef.current = period;
-                      }}
-                      style={[
-                        s.goalPeriodButton,
-                        {
-                          backgroundColor: selected
-                            ? theme.colors.accent
-                            : theme.colors.inputBackground,
-                          borderColor: selected
-                            ? theme.colors.accent
-                            : theme.colors.separator,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          s.goalPeriodLabel,
-                          {
-                            color: selected
-                              ? theme.colors.onAccent
-                              : theme.colors.text,
-                          },
-                        ]}
-                      >
-                        {label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <View style={s.inputContainer}>
-                <MoneyInput
-                  value={goalAmount}
-                  onChange={(v) => {
-                    setGoalAmount(v);
-                    goalAmountRef.current = v;
-                  }}
-                  accessibilityLabel={`Meta de ganancia ${goalPeriod}`}
-                />
-              </View>
-            </View>
 
             {errorMessage ? (
               <FadeInView delay={300}>
@@ -578,22 +504,6 @@ function styles(theme: ReturnType<typeof useTheme>) {
     descriptionInput: {
       minHeight: 92,
       textAlignVertical: 'top',
-    },
-    goalPeriodRow: {
-      flexDirection: 'row',
-      gap: 8,
-    },
-    goalPeriodButton: {
-      flex: 1,
-      minHeight: 44,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 12,
-      borderWidth: 1,
-    },
-    goalPeriodLabel: {
-      fontSize: 14,
-      fontWeight: '600',
     },
     bottom: {
       gap: 4,

@@ -1,8 +1,9 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { formatCOP } from '../domain/money';
 import type { IncomeEntry } from '../domain/budget';
 import { useTheme } from '../theme';
+import { HapticPressable as Pressable } from './HapticPressable';
 
 interface IncomeItemProps {
   income: IncomeEntry;
@@ -29,7 +30,13 @@ export function IncomeItem({ income, onDelete }: IncomeItemProps) {
       accessibilityRole="button"
       accessibilityLabel={`Ingreso de ${formatCOP(income.amount)}, ${label}, ${time}`}
       onPress={onDelete}
-      style={[styles.row, { backgroundColor: theme.colors.inputBackground }]}
+      style={[
+        styles.row,
+        {
+          backgroundColor: theme.colors.inputBackground,
+          borderColor: theme.colors.separator,
+        },
+      ]}
     >
       <View style={styles.badge}>
         <Text style={styles.emoji} maxFontSizeMultiplier={1.3}>
@@ -70,7 +77,8 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderRadius: 16,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
     minHeight: 52,
   },
   badge: {

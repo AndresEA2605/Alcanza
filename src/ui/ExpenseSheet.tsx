@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
-  Pressable,
+  Pressable as NativePressable,
   Platform,
   ScrollView,
   StyleSheet,
@@ -13,25 +13,35 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Category } from '../domain/budget';
-import { formatCOP, parseCOPInput } from '../domain/money';
+import { formatCOP, formatCOPInput, parseCOPInput } from '../domain/money';
 import { useBudgetStore, verifyExpenseFromState } from '../store/useBudgetStore';
 import { useTheme } from '../theme';
+import { HapticPressable as Pressable } from './HapticPressable';
 import { MovementTypeSelector, type SheetMode } from './MovementTypeSelector';
 
 export type { SheetMode } from './MovementTypeSelector';
 
+const CATEGORIES: readonly { id: Category; label: string }[] = [
+  { id: 'comida', label: 'Comida' },
+  { id: 'transporte', label: 'Transporte' },
+  { id: 'ocio', label: 'Ocio' },
+  { id: 'otros', label: 'Otros' },
+];
+
 interface ExpenseSheetProps {
   visible: boolean;
   onClose: () => void;
-  onSave?: (amount: number, category: string) => void;
-  onSaveExpense?: (amount: number, category: string) => void;
+  onSave?: (amount: number, category: Category) => void;
+  onSaveExpense?: (amount: number, category: Category) => void;
   onSaveIncome?: (amount: number, description?: string) => void;
   amount: string;
   onAmountChange: (value: string) => void;
-  category: string;
-  onCategoryChange: (category: string) => void;
+  category: Category;
+  onCategoryChange: (category: Category) => void;
   saving: boolean;
   initialMode?: SheetMode | null;
+  errorMessage?: string | null;
+  onDismissError?: () => void;
 }
 
 /**
@@ -55,6 +65,8 @@ export function ExpenseSheet({
   onCategoryChange,
   saving,
   initialMode = null,
+  errorMessage,
+  onDismissError,
 }: ExpenseSheetProps) {
   const theme = useTheme();
   const config = useBudgetStore((state) => state.config);
@@ -91,7 +103,7 @@ export function ExpenseSheet({
 
     return verifyExpenseFromState(
       { config, expenses, incomes },
-      { amount: parsedAmount, category: category as Category },
+      { amount: parsedAmount, category },
     );
   }, [amount, category, config, expenses, incomes, mode]);
 
@@ -158,7 +170,7 @@ export function ExpenseSheet({
           style={[styles.container, { backgroundColor: theme.colors.scrim }]}
           edges={['top', 'left', 'right', 'bottom']}
         >
-        <Pressable
+        <NativePressable
           accessibilityRole="button"
           accessibilityLabel="Cerrar hoja de registro"
           onPress={handleClose}
@@ -208,6 +220,7 @@ export function ExpenseSheet({
               onChange={(nextMode) => {
                 setMode(nextMode);
                 setConfirmOverMargin(false);
+                onDismissError?.();
               }}
             />
           </View>
@@ -244,7 +257,8 @@ export function ExpenseSheet({
                     value={amount}
                     onChangeText={(text) => {
                       setConfirmOverMargin(false);
-                      onAmountChange(text);
+                      onAmountChange(formatCOPInput(text));
+                      onDismissError?.();
                     }}
                     placeholder="0"
                     placeholderTextColor={theme.colors.textMuted}
@@ -316,17 +330,15 @@ export function ExpenseSheet({
                   Categoría
                 </Text>
                 <View style={styles.chips}>
-                  {[
-                    { id: 'comida', label: 'Comida' },
-                    { id: 'transporte', label: 'Transporte' },
-                    { id: 'ocio', label: 'Ocio' },
-                    { id: 'otros', label: 'Otros' },
-                  ].map((item) => (
+                  {CATEGORIES.map((item) => (
                     <Pressable
                       key={item.id}
                       accessibilityRole="button"
                       accessibilityState={{ selected: category === item.id }}
-                      onPress={() => onCategoryChange(item.id)}
+                      onPress={() => {
+                        onCategoryChange(item.id);
+                        onDismissError?.();
+                      }}
                       style={[
                         styles.chip,
                         {
@@ -378,7 +390,10 @@ export function ExpenseSheet({
                     },
                   ]}
                   value={description}
-                  onChangeText={setDescription}
+                  onChangeText={(text) => {
+                    setDescription(text);
+                    onDismissError?.();
+                  }}
                   placeholder="Ej. Venta, trabajo extra, regalo..."
                   placeholderTextColor={theme.colors.textMuted}
                   maxLength={60}
@@ -450,13 +465,30 @@ export function ExpenseSheet({
                     <Text
                       style={[
                         styles.saveLabel,
-                        { color: '#ffffff', fontSize: 14 },
+                        { color: theme.colors.onWarning, fontSize: 14 },
                       ]}
                     >
                       Sí, guardar
                     </Text>
                   </Pressable>
                 </View>
+              </View>
+            ) : null}
+
+            {errorMessage ? (
+              <View
+                accessibilityRole="alert"
+                style={[
+                  styles.errorBox,
+                  {
+                    backgroundColor: theme.colors.dangerSoft,
+                    borderColor: theme.colors.danger,
+                  },
+                ]}
+              >
+                <Text style={[styles.errorText, { color: theme.colors.danger }]}>
+                  {errorMessage}
+                </Text>
               </View>
             ) : null}
 
@@ -490,7 +522,9 @@ export function ExpenseSheet({
                     {
                       color: isSaveDisabled
                         ? theme.colors.textMuted
-                        : '#ffffff',
+                        : mode === 'ingreso'
+                          ? theme.colors.onSuccess
+                          : theme.colors.onAccent,
                     },
                   ]}
                   maxFontSizeMultiplier={1.3}
@@ -616,6 +650,16 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     gap: 4,
+  },
+  errorBox: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  errorText: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
   },
   verificationTitle: {
     fontSize: 14,

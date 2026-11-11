@@ -8,6 +8,10 @@ import {
 import { createExpense } from '../src/data/expenseRepo';
 import { migrateDatabase } from '../src/data/migrations';
 import {
+  getBusinessSettings,
+  saveBusinessSettings,
+} from '../src/data/businessSettingsRepo';
+import {
   createTestDatabase,
   type TestDatabase,
 } from './helpers/sqliteTestDb';
@@ -51,6 +55,18 @@ describe('configRepo', () => {
       month: '2026-01',
       income: 3_500_000,
       fixed: 1_200_000,
+    });
+  });
+
+  it('guarda y recupera la meta general de Mi negocio', async () => {
+    await saveBusinessSettings(testDb.db, {
+      goalAmount: 900_000,
+      goalPeriod: 'monthly',
+    });
+
+    await expect(getBusinessSettings(testDb.db)).resolves.toEqual({
+      goalAmount: 900_000,
+      goalPeriod: 'monthly',
     });
   });
 
@@ -118,6 +134,10 @@ describe('configRepo', () => {
   });
 
   it('borra los datos financieros y del negocio y devuelve las imágenes', async () => {
+    await saveBusinessSettings(testDb.db, {
+      goalAmount: 600_000,
+      goalPeriod: 'monthly',
+    });
     await upsertMonthConfig(testDb.db, {
       month: '2026-01',
       income: 3_000_000,
@@ -169,6 +189,10 @@ describe('configRepo', () => {
     ]);
 
     await expect(getMonthConfig(testDb.db, '2026-01')).resolves.toBeNull();
+    await expect(getBusinessSettings(testDb.db)).resolves.toEqual({
+      goalAmount: 0,
+      goalPeriod: 'daily',
+    });
 
     for (const table of [
       'month_config',

@@ -108,7 +108,8 @@ export async function clearAllData(db: Database): Promise<string[]> {
              'income_entry',
              'month_config',
              'business_item',
-             'business_account'
+             'business_account',
+             'business_settings'
            )`,
       )
     ).map(({ name }) => name),
@@ -141,6 +142,14 @@ export async function clearAllData(db: Database): Promise<string[]> {
       if (existingTables.has(table)) {
         await db.execAsync(`DELETE FROM ${table}`);
       }
+    }
+
+    if (existingTables.has('business_settings')) {
+      await db.runAsync(
+        `UPDATE business_settings
+         SET goal_amount = 0, goal_period = 'daily'
+         WHERE id = 1`,
+      );
     }
   });
 

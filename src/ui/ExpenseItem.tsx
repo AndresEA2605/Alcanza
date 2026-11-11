@@ -1,8 +1,9 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { formatCOP } from '../domain/money';
 import { CATEGORIES, type Expense } from '../domain/budget';
 import { useTheme } from '../theme';
+import { HapticPressable as Pressable } from './HapticPressable';
 
 interface ExpenseItemProps {
   expense: Expense;
@@ -28,7 +29,13 @@ export function ExpenseItem({ expense, onDelete }: ExpenseItemProps) {
       accessibilityRole="button"
       accessibilityLabel={`Gasto de ${formatCOP(expense.amount)} en ${categoryMeta?.label ?? expense.category}, ${time}`}
       onPress={onDelete}
-      style={[styles.row, { backgroundColor: theme.colors.inputBackground }]}
+      style={[
+        styles.row,
+        {
+          backgroundColor: theme.colors.inputBackground,
+          borderColor: theme.colors.separator,
+        },
+      ]}
     >
       <View style={styles.badge}>
         <Text style={styles.emoji} maxFontSizeMultiplier={1.3}>
@@ -66,7 +73,8 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderRadius: 16,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   badge: {
     flexDirection: 'row',

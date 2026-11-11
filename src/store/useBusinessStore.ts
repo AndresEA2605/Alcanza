@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import {
   calculateBusiness,
+  normalizeBusinessGoal,
   sumBusinessCalculations,
+  type BusinessGoalPeriod,
   type BusinessCalculation,
   type BusinessItem,
   type NewBusinessItem,
@@ -15,6 +17,10 @@ import {
   listBusinessItems,
   updateBusinessItem,
 } from '../data/businessRepo';
+import {
+  getBusinessSettings,
+  saveBusinessSettings,
+} from '../data/businessSettingsRepo';
 import { deleteProductImages } from '../data/productImageStorage';
 
 export interface BusinessStoreState {
@@ -23,8 +29,14 @@ export interface BusinessStoreState {
   items: BusinessItem[];
   calculations: BusinessCalculation[];
   totals: BusinessCalculation;
+  goalAmount: number;
+  goalPeriod: BusinessGoalPeriod;
   initialize: () => Promise<void>;
   refresh: () => Promise<void>;
+  saveGoal: (settings: {
+    goalAmount: number;
+    goalPeriod: BusinessGoalPeriod;
+  }) => Promise<void>;
   addItem: (input: NewBusinessItem) => Promise<void>;
   updateItem: (id: string, input: Partial<NewBusinessItem>) => Promise<void>;
   deleteItem: (id: string) => Promise<void>;
@@ -35,6 +47,8 @@ export const useBusinessStore = create<BusinessStoreState>()((set, get) => ({
   error: null,
   items: [],
   calculations: [],
+  goalAmount: 0,
+  goalPeriod: 'daily',
   totals: {
     revenue: 0,
     cost: 0,
@@ -59,8 +73,11 @@ export const useBusinessStore = create<BusinessStoreState>()((set, get) => ({
 
     try {
       const db = await getDatabase();
-      const items = await listBusinessItems(db);
-      await loadItemsAndCalculations(set, items);
+      const [items, settings] = await Promise.all([
+        listBusinessItems(db),
+        getBusinessSettings(db),
+      ]);
+      await loadItemsAndCalculations(set, items, settings);
     } catch (error) {
       set({
         status: 'error',
@@ -74,13 +91,34 @@ export const useBusinessStore = create<BusinessStoreState>()((set, get) => ({
 
     try {
       const db = await getDatabase();
-      const items = await listBusinessItems(db);
-      await loadItemsAndCalculations(set, items);
+      const [items, settings] = await Promise.all([
+        listBusinessItems(db),
+        getBusinessSettings(db),
+      ]);
+      await loadItemsAndCalculations(set, items, settings);
     } catch (error) {
       set({
         status: 'error',
         error: error instanceof Error ? error.message : 'Error inesperado.',
       });
+    }
+  },
+
+  saveGoal: async (settings) => {
+    try {
+      const db = await getDatabase();
+      await saveBusinessSettings(db, settings);
+      set((state) => ({
+        ...state,
+        ...settings,
+        totals: withBusinessGoal(state.totals, settings),
+        error: null,
+      }));
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Error inesperado.',
+      });
+      throw error;
     }
   },
 
@@ -150,6 +188,7 @@ type StoreSetter = (fn: any) => void;
 async function loadItemsAndCalculations(
   set: StoreSetter,
   items: BusinessItem[],
+  settings: { goalAmount: number; goalPeriod: BusinessGoalPeriod },
 ) {
   const sortedItems = items.sort((a, b) => a.name.localeCompare(b.name));
   const calculations = sortedItems.map((item) =>
@@ -162,11 +201,15 @@ async function loadItemsAndCalculations(
     }),
   );
 
+  const totals = sumBusinessCalculations(calculations);
+
   set({
     status: 'ready',
     items: sortedItems,
     calculations,
-    totals: sumBusinessCalculations(calculations),
+    goalAmount: settings.goalAmount,
+    goalPeriod: settings.goalPeriod,
+    totals: withBusinessGoal(totals, settings),
     error: null,
   });
 }
@@ -175,6 +218,27 @@ async function refreshItems(
   set: StoreSetter,
   db: Database,
 ) {
-  const items = await listBusinessItems(db);
-  await loadItemsAndCalculations(set, items);
+  const [items, settings] = await Promise.all([
+    listBusinessItems(db),
+    getBusinessSettings(db),
+  ]);
+  await loadItemsAndCalculations(set, items, settings);
+}
+
+function withBusinessGoal(
+  totals: BusinessCalculation,
+  settings: { goalAmount: number; goalPeriod: BusinessGoalPeriod },
+): BusinessCalculation {
+  const dailyGoal = normalizeBusinessGoal(
+    settings.goalAmount,
+    settings.goalPeriod,
+  );
+
+  return {
+    ...totals,
+    remainingToGoal: Math.max(dailyGoal - totals.profit, 0),
+    goalPct:
+      dailyGoal <= 0 ? 0 : Math.min(Math.max(totals.profit / dailyGoal, 0), 1),
+    goalReached: dailyGoal > 0 && totals.profit >= dailyGoal,
+  };
 }

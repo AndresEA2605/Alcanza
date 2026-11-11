@@ -91,6 +91,24 @@ describe('calcToday: días del mes', () => {
 });
 
 describe('calcToday: ingresos y fijos', () => {
+  it('calcula el disponible del mes restando los fijos y los gastos registrados por separado', () => {
+    const now = at(2026, 0, 15, 12);
+    const result = run(
+      now,
+      [
+        makeExpense({ amount: 250_000, ts: at(2026, 0, 10, 12) }),
+        makeExpense({ id: 'expense-2', amount: 100_000, ts: now }),
+      ],
+      3_000_000,
+      1_000_000,
+    );
+
+    expect(result.pool).toBe(1_750_000);
+    expect(result.daily).toBeCloseTo(1_750_000 / 17, 10);
+    expect(result.remaining).toBeCloseTo(1_750_000 / 17 - 100_000, 10);
+    expect(result.monthLeft).toBe(1_650_000);
+  });
+
   it('queda en rojo cuando el ingreso es igual a los gastos fijos', () => {
     const result = run(at(2026, 0, 15, 12), [], 3_000_000, 3_000_000);
 

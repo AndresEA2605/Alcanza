@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,7 +10,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import type { BusinessItem } from '../../src/domain/business';
+import {
+  normalizeBusinessGoal,
+  type BusinessItem,
+} from '../../src/domain/business';
 import { formatCOP } from '../../src/domain/money';
 import { useBusinessStore } from '../../src/store/useBusinessStore';
 import { useTheme } from '../../src/theme';
@@ -21,8 +23,8 @@ import { EmptyState } from '../../src/ui/EmptyState';
 import { FadeInView } from '../../src/ui/FadeInView';
 import { FloatingActionButton } from '../../src/ui/FloatingActionButton';
 import { GlassCard } from '../../src/ui/GlassCard';
+import { HapticPressable as Pressable } from '../../src/ui/HapticPressable';
 import { LoadingState } from '../../src/ui/LoadingState';
-import { PrimaryButton } from '../../src/ui/PrimaryButton';
 import { BusinessItemCard } from '../../src/ui/business/BusinessItemCard';
 
 type FilterType = 'all' | 'product' | 'service';
@@ -32,6 +34,8 @@ export default function NegocioIndexScreen() {
   const items = useBusinessStore((state) => state.items);
   const calculations = useBusinessStore((state) => state.calculations);
   const totals = useBusinessStore((state) => state.totals);
+  const goalAmount = useBusinessStore((state) => state.goalAmount);
+  const goalPeriod = useBusinessStore((state) => state.goalPeriod);
   const status = useBusinessStore((state) => state.status);
   const error = useBusinessStore((state) => state.error);
   const initialize = useBusinessStore((state) => state.initialize);
@@ -57,7 +61,7 @@ export default function NegocioIndexScreen() {
     [calculations, items],
   );
 
-  const totalDailyGoal = items.reduce((acc, i) => acc + (i.dailyGoal || 0), 0);
+  const totalDailyGoal = normalizeBusinessGoal(goalAmount, goalPeriod);
 
   function goBack() {
     if (router.canGoBack()) {
@@ -114,7 +118,7 @@ export default function NegocioIndexScreen() {
             {
               padding: theme.spacing.xl,
               paddingBottom: theme.spacing.xxxl * 2,
-              gap: theme.spacing.lg,
+              gap: theme.spacing.xl,
             },
           ]}
           showsVerticalScrollIndicator={false}
@@ -123,47 +127,62 @@ export default function NegocioIndexScreen() {
           <FadeInView delay={0}>
             <View style={styles.navBar}>
               <BackButton onPress={goBack} />
-              <PrimaryButton
-                label="+ Nuevo"
-                variant="ghost"
-                onPress={() => router.push('/negocio/nuevo' as any)}
-                style={styles.addButtonNav}
-              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Ajustes de Mi negocio"
+                onPress={() => router.push('/negocio/ajustes' as never)}
+                style={[
+                  styles.settingsButton,
+                  {
+                    backgroundColor: theme.colors.inputBackground,
+                    borderColor: theme.colors.separator,
+                  },
+                ]}
+              >
+                <Text style={[styles.settingsIcon, { color: theme.colors.text }]}>
+                  ⚙
+                </Text>
+              </Pressable>
             </View>
           </FadeInView>
 
-          {/* Encabezado de la pantalla */}
           <FadeInView delay={40}>
             <View style={styles.header}>
-              <Text
-                style={[styles.overline, { color: theme.colors.accent }]}
-                maxFontSizeMultiplier={1.3}
-              >
-                EMPRENDIMIENTO Y VENTAS
-              </Text>
               <Text
                 accessibilityRole="header"
                 style={[styles.title, { color: theme.colors.text }]}
               >
                 Mi negocio
               </Text>
-              <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-                Controla tus costos, ganancias diarias y metas
-              </Text>
             </View>
           </FadeInView>
 
-          {/* Tarjeta Hero: Ganancia total y resumen financiero */}
           <FadeInView delay={90}>
-            <GlassCard contentStyle={styles.heroCardContent}>
+            <GlassCard
+              contentStyle={styles.heroCardContent}
+              intensity={48}
+            >
+              <View
+                style={[
+                  styles.heroAccent,
+                  {
+                    backgroundColor:
+                      totals.profit >= 0
+                        ? theme.colors.success
+                        : theme.colors.danger,
+                  },
+                ]}
+              />
               <View style={styles.heroHeader}>
-                <Text style={[styles.heroOverline, { color: theme.colors.textMuted }]}>
-                  GANANCIA LIBRE ESTIMADA
+                <Text style={[styles.heroOverline, { color: theme.colors.textSecondary }]}>
+                  {totals.profit < 0 ? 'Pérdida estimada' : 'Ganancia estimada'}
                 </Text>
                 <AnimatedNumber
-                  value={totals.profit}
+                  value={Math.abs(totals.profit)}
                   format={(val) => formatCOP(Math.round(val))}
-                  accessibilityLabel={`Ganancia libre total: ${formatCOP(totals.profit)}`}
+                  accessibilityLabel={`${
+                    totals.profit < 0 ? 'Pérdida neta' : 'Ganancia libre total'
+                  }: ${formatCOP(Math.abs(totals.profit))}`}
                   style={[
                     styles.heroProfitNumber,
                     {
@@ -176,12 +195,11 @@ export default function NegocioIndexScreen() {
                 />
                 <Text style={[styles.heroHint, { color: theme.colors.textSecondary }]}>
                   {items.length === 0
-                    ? 'Aún no has registrado ítems'
-                    : `Resultado con ${items.length} producto${items.length !== 1 ? 's' : ''}/servicio${items.length !== 1 ? 's' : ''}`}
+                    ? 'Agrega tu primer producto o servicio'
+                    : `${items.length} ${items.length === 1 ? 'ítem' : 'ítems'}`}
                 </Text>
               </View>
 
-              {/* Fila con desglose limpio: Ingreso, Costo y Reinversión */}
               <View style={styles.statsRow}>
                 <View
                   style={[
@@ -193,7 +211,7 @@ export default function NegocioIndexScreen() {
                   ]}
                 >
                   <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-                    Ingreso total
+                    Ventas
                   </Text>
                   <Text
                     style={[styles.statValue, { color: theme.colors.text }]}
@@ -213,7 +231,7 @@ export default function NegocioIndexScreen() {
                   ]}
                 >
                   <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-                    Costo / Inversión
+                    Costos
                   </Text>
                   <Text
                     style={[styles.statValue, { color: theme.colors.textSecondary }]}
@@ -224,7 +242,6 @@ export default function NegocioIndexScreen() {
                 </View>
               </View>
 
-              {/* Meta Diaria si existe */}
               {totalDailyGoal > 0 ? (
                 <View
                   style={[
@@ -237,7 +254,7 @@ export default function NegocioIndexScreen() {
                 >
                   <View style={styles.goalHeader}>
                     <Text style={[styles.goalTitle, { color: theme.colors.text }]}>
-                      Meta diaria combinada
+                      Meta diaria
                     </Text>
                     <Text
                       style={[
@@ -255,7 +272,12 @@ export default function NegocioIndexScreen() {
                     </Text>
                   </View>
 
-                  <View style={styles.goalProgressTrack}>
+                  <View
+                    style={[
+                      styles.goalProgressTrack,
+                      { backgroundColor: theme.colors.separator },
+                    ]}
+                  >
                     <View
                       style={[
                         styles.goalProgressFill,
@@ -277,7 +299,6 @@ export default function NegocioIndexScreen() {
             </GlassCard>
           </FadeInView>
 
-          {/* Pestañas de filtrado (Todos / Productos / Servicios) */}
           <FadeInView delay={140}>
             <View
               style={[
@@ -289,6 +310,7 @@ export default function NegocioIndexScreen() {
               <Pressable
                 accessibilityRole="tab"
                 accessibilityState={{ selected: activeFilter === 'all' }}
+                accessibilityLabel={`Todos, ${items.length} elementos`}
                 onPress={() => setActiveFilter('all')}
                 style={[
                   styles.filterTab,
@@ -309,13 +331,14 @@ export default function NegocioIndexScreen() {
                     },
                   ]}
                 >
-                  Todos ({items.length})
+                  Todos
                 </Text>
               </Pressable>
 
               <Pressable
                 accessibilityRole="tab"
                 accessibilityState={{ selected: activeFilter === 'product' }}
+                accessibilityLabel={`Productos, ${productItems.length}`}
                 onPress={() => setActiveFilter('product')}
                 style={[
                   styles.filterTab,
@@ -336,13 +359,14 @@ export default function NegocioIndexScreen() {
                     },
                   ]}
                 >
-                  📦 Productos ({productItems.length})
+                  Productos
                 </Text>
               </Pressable>
 
               <Pressable
                 accessibilityRole="tab"
                 accessibilityState={{ selected: activeFilter === 'service' }}
+                accessibilityLabel={`Servicios, ${serviceItems.length}`}
                 onPress={() => setActiveFilter('service')}
                 style={[
                   styles.filterTab,
@@ -363,20 +387,19 @@ export default function NegocioIndexScreen() {
                     },
                   ]}
                 >
-                  🚗 Servicios ({serviceItems.length})
+                  Servicios
                 </Text>
               </Pressable>
             </View>
           </FadeInView>
 
-          {/* Lista de productos y servicios (sin FlatList anidado) */}
           <FadeInView delay={180}>
             <View style={styles.listSection}>
               {filteredItems.length === 0 ? (
                 items.length === 0 ? (
                   <EmptyState
                     title="Sin productos o servicios"
-                    subtitle="Registra lo que vendes u ofreces para calcular tus ganancias, costos y metas diarias de forma clara."
+                    subtitle="Toca + para agregar tu primer producto o servicio."
                     emoji="💼"
                   />
                 ) : (
@@ -440,10 +463,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.5,
   },
-  subtitle: {
-    fontSize: 16,
-    lineHeight: 22,
-  },
   message: {
     fontSize: 16,
     lineHeight: 22,
@@ -459,19 +478,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
   },
-  addButtonNav: {
-    minWidth: 90,
+  settingsButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingsIcon: {
+    fontSize: 22,
+    lineHeight: 26,
   },
   header: {
-    gap: 4,
-  },
-  overline: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.8,
+    gap: 2,
   },
   heroCardContent: {
     gap: 16,
+  },
+  heroAccent: {
+    width: 42,
+    height: 5,
+    borderRadius: 3,
+    alignSelf: 'center',
+    marginBottom: 2,
   },
   heroHeader: {
     alignItems: 'center',
@@ -479,8 +509,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   heroOverline: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
     letterSpacing: 0.6,
   },
   heroProfitNumber: {
@@ -499,10 +529,10 @@ const styles = StyleSheet.create({
   },
   statBox: {
     flex: 1,
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 6,
   },
   statLabel: {
     fontSize: 12,
@@ -515,10 +545,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   goalBox: {
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    gap: 8,
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 10,
   },
   goalHeader: {
     flexDirection: 'row',
@@ -536,7 +566,6 @@ const styles = StyleSheet.create({
   goalProgressTrack: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: 'rgba(128, 128, 128, 0.18)',
     overflow: 'hidden',
   },
   goalProgressFill: {

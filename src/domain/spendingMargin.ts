@@ -140,6 +140,8 @@ export function calcSpendingMargin(
       currentDate.getMonth(),
       currentDate.getDate(),
     );
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
     const monthStart = new Date(
       currentDate.getFullYear(),
       currentDate.getMonth(),
@@ -185,13 +187,19 @@ export function calcSpendingMargin(
     }
 
     let incomeBeforePeriod = 0;
+    let incomeDuringPeriod = 0;
     for (const income of input.incomes ?? []) {
-      if (
-        income.deletedAt == null &&
-        income.ts >= monthStart.getTime() &&
-        income.ts < periodStart.getTime()
-      ) {
+      if (income.deletedAt != null || income.ts < monthStart.getTime()) {
+        continue;
+      }
+
+      if (income.ts < periodStart.getTime()) {
         incomeBeforePeriod += income.amount;
+      } else if (
+        income.ts < periodEnd.getTime() &&
+        income.ts < todayEnd.getTime()
+      ) {
+        incomeDuringPeriod += income.amount;
       }
     }
 
@@ -200,7 +208,8 @@ export function calcSpendingMargin(
     const limit =
       monthDaysAtPeriodStart > 0
         ? (Math.max(availableAtPeriodStart, 0) / monthDaysAtPeriodStart) *
-          periodDays
+            periodDays +
+          incomeDuringPeriod
         : 0;
     const remaining = limit - spentPeriod;
     const rawPct = limit <= 0 ? 100 : (spentPeriod / limit) * 100;

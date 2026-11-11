@@ -1,9 +1,10 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import type { BusinessCalculation, BusinessItem } from '../../domain/business';
 import { formatCOP } from '../../domain/money';
 import { useTheme } from '../../theme';
 import { GlassCard } from '../GlassCard';
+import { HapticPressable as Pressable } from '../HapticPressable';
 import { SecureProductImage } from './SecureProductImage';
 
 export function BusinessItemCard({
@@ -19,9 +20,9 @@ export function BusinessItemCard({
 }) {
   const theme = useTheme();
   const isProduct = item.type === 'product';
-  const profit = calculation?.profit ?? 0;
   const revenue = calculation?.revenue ?? item.pricePerUnit * item.quantity;
   const cost = calculation?.cost ?? (isProduct ? item.investment : 0);
+  const profit = calculation?.profit ?? revenue - cost;
 
   return (
     <GlassCard contentStyle={styles.cardContent}>
@@ -49,7 +50,7 @@ export function BusinessItemCard({
         </View>
         <View style={styles.profitBadge}>
           <Text style={[styles.profitLabel, { color: theme.colors.textMuted }]}>
-            Ganancia
+            {profit < 0 ? 'Pérdida' : 'Ganancia'}
           </Text>
           <Text
             style={[
@@ -60,8 +61,8 @@ export function BusinessItemCard({
             ]}
             maxFontSizeMultiplier={1.3}
           >
-            {profit >= 0 ? '+' : ''}
-            {formatCOP(Math.round(profit))}
+            {profit > 0 ? '+' : ''}
+            {formatCOP(Math.abs(Math.round(profit)))}
           </Text>
         </View>
       </View>
@@ -71,7 +72,10 @@ export function BusinessItemCard({
           <SecureProductImage
             uri={item.imageUri}
             label={`Imagen de ${item.name}`}
-            style={styles.itemImage}
+            style={{
+              ...styles.itemImage,
+              backgroundColor: theme.colors.inputBackground,
+            }}
           />
         ) : null}
         <View style={styles.itemTitleGroup}>
@@ -96,55 +100,29 @@ export function BusinessItemCard({
       </View>
 
       <View style={styles.detailsGrid}>
-        <Detail label="Precio venta" value={formatCOP(Math.round(item.pricePerUnit))} />
+        <Detail label="Precio" value={formatCOP(Math.round(item.pricePerUnit))} />
         <Detail
-          label="Cantidad diaria"
-          value={`${item.quantity} ${isProduct ? 'unidades' : 'servicios'}`}
+          label="Cantidad total"
+          value={`${item.quantity} ${
+            isProduct
+              ? item.quantity === 1
+                ? 'unidad'
+                : 'unidades'
+              : item.quantity === 1
+                ? 'servicio'
+                : 'servicios'
+          }`}
         />
-        <Detail label="Ingreso diario" value={formatCOP(Math.round(revenue))} />
         <Detail
-          label={isProduct ? 'Costo inversión' : 'Costo operativo'}
+          label="Venta total"
+          value={formatCOP(Math.round(revenue))}
+        />
+        <Detail
+          label="Costo"
           value={isProduct ? formatCOP(Math.round(cost)) : 'Sin costo'}
           subdued
         />
       </View>
-
-      {item.goalAmount > 0 ? (
-        <View
-          style={[
-            styles.itemGoalBox,
-            {
-              backgroundColor: theme.colors.inputBackground,
-              borderColor: theme.colors.separator,
-            },
-          ]}
-        >
-          <Text
-            style={[styles.itemGoalText, { color: theme.colors.textSecondary }]}
-          >
-            Meta{' '}
-            {item.goalPeriod === 'daily'
-              ? 'diaria'
-              : item.goalPeriod === 'monthly'
-                ? 'mensual'
-                : 'anual'}
-            :{' '}
-            <Text style={{ fontWeight: '700', color: theme.colors.text }}>
-              {formatCOP(Math.round(item.goalAmount))}
-            </Text>
-          </Text>
-          {calculation?.goalReached ? (
-            <Text
-              style={[
-                styles.itemGoalAchieved,
-                { color: theme.colors.success },
-              ]}
-            >
-              ✓ Cumplida
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
 
       <View style={styles.cardActions}>
         <ActionButton
@@ -232,7 +210,7 @@ function ActionButton({
 
 const styles = StyleSheet.create({
   cardContent: {
-    gap: 12,
+    gap: 16,
   },
   cardTopRow: {
     flexDirection: 'row',
@@ -275,7 +253,6 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 14,
-    backgroundColor: '#80808022',
   },
   itemTitleGroup: {
     flex: 1,
@@ -304,22 +281,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '700',
   },
-  itemGoalBox: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  itemGoalText: {
-    fontSize: 12,
-  },
-  itemGoalAchieved: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
   cardActions: {
     flexDirection: 'row',
     gap: 10,
@@ -327,8 +288,9 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
-    paddingVertical: 9,
-    borderRadius: 10,
+    minHeight: 44,
+    paddingVertical: 10,
+    borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',

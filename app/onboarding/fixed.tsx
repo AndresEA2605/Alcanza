@@ -2,6 +2,7 @@ import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { formatCOP } from '../../src/domain/money';
 import { useBudgetStore } from '../../src/store/useBudgetStore';
 import { useOnboardingStore } from '../../src/store/useOnboardingStore';
 import { useTheme } from '../../src/theme';
@@ -58,6 +59,8 @@ export default function FixedScreen() {
     }
   }
 
+  const monthlyAvailable = income - fixed;
+
   return (
     <Screen avoidKeyboard contentStyle={styles.content}>
       <FadeInView delay={0} style={styles.header}>
@@ -71,7 +74,7 @@ export default function FixedScreen() {
             accessibilityRole="header"
             style={[styles.title, { color: theme.colors.text }]}
           >
-            ¿Cuánto se va en gastos fijos?
+            ¿Cuánto apartas para tus gastos fijos?
           </Text>
         </FadeInView>
 
@@ -82,8 +85,8 @@ export default function FixedScreen() {
               { color: theme.colors.textSecondary, marginTop: theme.spacing.md },
             ]}
           >
-            Arriendo, servicios, deudas, transporte y suscripciones. Lo que
-            llega sí o sí cada mes.
+            Pagos comprometidos como arriendo, servicios, deudas y
+            suscripciones. Este monto se separa de tu ingreso mensual.
           </Text>
         </FadeInView>
 
@@ -91,12 +94,44 @@ export default function FixedScreen() {
           <MoneyInput
             value={fixed}
             onChange={setFixed}
-            accessibilityLabel="Gastos fijos mensuales en pesos colombianos"
+            accessibilityLabel="Dinero mensual reservado para gastos fijos en pesos colombianos"
             autoFocus
             onSubmit={() => {
               void finish(fixed);
             }}
           />
+        </FadeInView>
+
+        <FadeInView delay={280} style={{ marginTop: theme.spacing.lg }}>
+          <View
+            style={[
+              styles.availableCard,
+              {
+                backgroundColor: theme.colors.accentSoft,
+                borderColor: theme.colors.accent,
+              },
+            ]}
+          >
+            <Text style={[styles.availableLabel, { color: theme.colors.textSecondary }]}>
+              Te queda para el mes
+            </Text>
+            <Text
+              style={[
+                styles.availableAmount,
+                {
+                  color:
+                    monthlyAvailable >= 0
+                      ? theme.colors.accent
+                      : theme.colors.danger,
+                },
+              ]}
+            >
+              {formatCOP(monthlyAvailable)}
+            </Text>
+            <Text style={[styles.availableHint, { color: theme.colors.textSecondary }]}>
+              Ingreso mensual menos dinero reservado para gastos fijos.
+            </Text>
+          </View>
         </FadeInView>
 
         {fixed > income ? (
@@ -171,6 +206,25 @@ const styles = StyleSheet.create({
     fontSize: 17,
     lineHeight: 24,
     maxWidth: 360,
+  },
+  availableCard: {
+    padding: 16,
+    gap: 4,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  availableLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  availableAmount: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '800',
+  },
+  availableHint: {
+    fontSize: 12,
+    lineHeight: 17,
   },
   warning: {
     padding: 14,

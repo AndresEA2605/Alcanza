@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { deleteAllProductImages } from '../src/data/productImageStorage';
 import { useBudgetStore } from '../src/store/useBudgetStore';
@@ -8,10 +8,12 @@ import { useOnboardingStore } from '../src/store/useOnboardingStore';
 import { useSettingsStore } from '../src/store/useSettingsStore';
 import { useTheme } from '../src/theme';
 import { GlassCard } from '../src/ui/GlassCard';
+import { HapticPressable as Pressable } from '../src/ui/HapticPressable';
 import { LoadingState } from '../src/ui/LoadingState';
 import { PrimaryButton } from '../src/ui/PrimaryButton';
 import { Screen } from '../src/ui/Screen';
 import { SettingsRow } from '../src/ui/SettingsRow';
+import { SettingsToggleRow } from '../src/ui/SettingsToggleRow';
 import { DataResetModal } from '../src/ui/settings/DataResetModal';
 import { useNotifications } from '../src/ui/useNotifications';
 
@@ -139,7 +141,7 @@ export default function SettingsScreen() {
   }
 
   return (
-    <Screen contentStyle={styles.content}>
+    <Screen contentStyle={{ gap: theme.spacing.lg }}>
       <View style={styles.header}>
         <Text
           accessibilityRole="header"
@@ -157,13 +159,13 @@ export default function SettingsScreen() {
           Presupuesto
         </Text>
         <SettingsRow
-          title="Ingreso base y gastos fijos"
+          title="Ingreso mensual y dinero reservado"
           subtitle="Actualiza tus montos mensuales"
           onPress={editBudgetAmounts}
         />
       </GlassCard>
 
-      <GlassCard contentStyle={styles.card} style={styles.cardMargin}>
+      <GlassCard contentStyle={styles.card}>
         <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
           Apariencia
         </Text>
@@ -203,85 +205,30 @@ export default function SettingsScreen() {
           })}
         </View>
 
-        <SettingsRow
+        <SettingsToggleRow
           title="Reducir movimiento"
           subtitle="Desactiva animaciones y hápticos"
-          onPress={() => setReduceMotion(!reduceMotion)}
-          chevron={false}
+          value={reduceMotion}
+          onValueChange={setReduceMotion}
         />
-        <View style={styles.toggle}>
-          <Pressable
-            accessibilityRole="switch"
-            accessibilityState={{ checked: reduceMotion }}
-            onPress={() => setReduceMotion(!reduceMotion)}
-            style={[
-              styles.track,
-              reduceMotion ? styles.trackActive : styles.trackInactive,
-            ]}
-          >
-            <View
-              style={[
-                styles.thumb,
-                reduceMotion ? styles.thumbRight : styles.thumbLeft,
-              ]}
-            />
-          </Pressable>
-          <Text style={[styles.toggleLabel, { color: theme.colors.textSecondary }]}>
-            {reduceMotion ? 'Activado' : 'Desactivado'}
-          </Text>
-        </View>
       </GlassCard>
 
-      <GlassCard contentStyle={styles.card} style={styles.cardMargin}>
+      <GlassCard contentStyle={styles.card}>
         <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
           Notificaciones
         </Text>
-        <SettingsRow
+        <SettingsToggleRow
           title="Recordatorio diario"
           subtitle={`Recibe un aviso a las ${notificationTime} para revisar tu número`}
-          onPress={() => setNotificationsEnabled(!notificationsEnabled)}
-          chevron={false}
-        />
-        <View style={styles.toggle}>
-          <Pressable
-            accessibilityRole="switch"
-            accessibilityState={{ checked: notificationsEnabled }}
-            disabled={notificationStatus === 'denied'}
-            onPress={() => setNotificationsEnabled(!notificationsEnabled)}
-            style={[
-              styles.track,
-              notificationsEnabled
-                ? styles.trackActive
-                : styles.trackInactive,
-            ]}
-          >
-            <View
-              style={[
-                styles.thumb,
-                notificationsEnabled
-                  ? styles.thumbRight
-                  : styles.thumbLeft,
-              ]}
-            />
-          </Pressable>
-          <Text
-            style={[
-              styles.toggleLabel,
-              {
-                color:
-                  notificationStatus === 'denied'
-                    ? theme.colors.textMuted
-                    : theme.colors.textSecondary,
-              },
-            ]}
-          >
-            {notificationStatus === 'denied'
+          value={notificationsEnabled}
+          onValueChange={setNotificationsEnabled}
+          disabled={notificationStatus === 'denied'}
+          statusLabel={
+            notificationStatus === 'denied'
               ? 'Permiso denegado'
-              : notificationsEnabled
-                ? 'Activado'
-                : 'Desactivado'}
-          </Text>
-        </View>
+              : undefined
+          }
+        />
         {notificationsEnabled && timeUntilNext ? (
           <Text style={[styles.nextNotification, { color: theme.colors.textSecondary }]}>
             Próxima notificación: en {timeUntilNext}
@@ -289,7 +236,7 @@ export default function SettingsScreen() {
         ) : null}
       </GlassCard>
 
-      <GlassCard contentStyle={styles.card} style={styles.cardMargin}>
+      <GlassCard contentStyle={styles.card}>
         <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
           Datos
         </Text>
@@ -301,7 +248,7 @@ export default function SettingsScreen() {
         />
       </GlassCard>
 
-      <GlassCard contentStyle={styles.card} style={styles.cardMargin}>
+      <GlassCard contentStyle={styles.card}>
         <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
           App
         </Text>
@@ -317,9 +264,8 @@ export default function SettingsScreen() {
         />
         <SettingsRow
           title="Mi negocio"
-          subtitle="Productos, servicios y ganancias diarias"
+          subtitle="Productos, servicios y metas de ganancia"
           onPress={() => router.push('/negocio' as any)}
-          chevron={false}
         />
       </GlassCard>
 
@@ -344,9 +290,6 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: {
-    gap: 20,
-  },
   header: {
     gap: 6,
   },
@@ -362,9 +305,6 @@ const styles = StyleSheet.create({
   },
   card: {
     gap: 16,
-  },
-  cardMargin: {
-    marginTop: 0,
   },
   sectionTitle: {
     fontSize: 13,
@@ -387,43 +327,6 @@ const styles = StyleSheet.create({
   themeLabel: {
     fontSize: 15,
     lineHeight: 20,
-  },
-  toggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 8,
-  },
-  track: {
-    width: 44,
-    height: 24,
-    borderRadius: 12,
-  },
-  trackActive: {
-    backgroundColor: '#0A6CFF',
-  },
-  trackInactive: {
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
-  thumb: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    position: 'absolute',
-    left: 2,
-    top: 2,
-  },
-  thumbRight: {
-    left: 22,
-  },
-  thumbLeft: {
-    left: 2,
-  },
-  toggleLabel: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: '600',
   },
   nextNotification: {
     fontSize: 13,
