@@ -3,7 +3,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
 import { useEffect } from 'react';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View } from 'react-native';
 
 import { useBudgetStore } from '../src/store/useBudgetStore';
 import { useSettingsStore } from '../src/store/useSettingsStore';
@@ -45,6 +46,7 @@ function ThemedApp() {
   const status = useBudgetStore((state) => state.status);
   const initialize = useBudgetStore((state) => state.initialize);
   const loadSettings = useSettingsStore((state) => state.load);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     void initialize();
@@ -72,23 +74,36 @@ function ThemedApp() {
     };
   }, []);
 
+  const containerStyle = {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    backgroundColor: theme.colors.background,
+    paddingTop: insets.top,
+    paddingBottom: insets.bottom,
+    paddingLeft: insets.left,
+    paddingRight: insets.right,
+  };
+
   return (
     <>
       <StatusBar style={theme.mode === 'dark' ? 'light' : 'dark'} />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: theme.colors.background },
-          animation: 'fade',
-        }}
-      >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="onboarding" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="hoy" />
-        <Stack.Screen name="balance" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="settings" />
-        <Stack.Screen name="negocio" />
-      </Stack>
+      <View style={containerStyle}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: theme.colors.background, flex: 1 },
+            animation: 'fade',
+          }}
+        >
+          <Stack.Screen name="index" />
+          <Stack.Screen name="onboarding" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="hoy" />
+          <Stack.Screen name="balance" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="settings" />
+          <Stack.Screen name="negocio" />
+        </Stack>
+      </View>
     </>
   );
 }
