@@ -27,7 +27,6 @@ import { PrimaryButton } from '../src/ui/PrimaryButton';
 import { SuccessBanner } from '../src/ui/SuccessBanner';
 import { StatusPill } from '../src/ui/StatusPill';
 import {
-  BalanceShortcutCard,
   BusinessShortcutCard,
   DashboardBudgetCard,
   RegisterMovementCard,
@@ -395,11 +394,6 @@ export default function TodayScreen() {
               onDeleteExpense={handleDeleteExpense}
             />
           </FadeInView>
-
-          <FadeInView delay={320}>
-            <BalanceShortcutCard />
-          </FadeInView>
-
         </ScrollView>
       </SafeAreaView>
 

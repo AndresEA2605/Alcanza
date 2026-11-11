@@ -41,6 +41,7 @@ export default function NegocioIndexScreen() {
   const initialize = useBusinessStore((state) => state.initialize);
   const refresh = useBusinessStore((state) => state.refresh);
   const deleteItem = useBusinessStore((state) => state.deleteItem);
+  const toggleCatalogItem = useBusinessStore((state) => state.toggleCatalogItem);
 
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 
@@ -50,6 +51,7 @@ export default function NegocioIndexScreen() {
 
   const productItems = items.filter((i) => i.type === 'product');
   const serviceItems = items.filter((i) => i.type === 'service');
+  const catalogItemsCount = items.filter((i) => i.inCatalog).length;
 
   const filteredItems = items.filter((item) => {
     if (activeFilter === 'product') return item.type === 'product';
@@ -111,6 +113,26 @@ export default function NegocioIndexScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
+      <View
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        <View
+          style={[
+            styles.blob,
+            { backgroundColor: theme.colors.backgroundAccent },
+          ]}
+        />
+        <View
+          style={[
+            styles.blobSecondary,
+            { backgroundColor: theme.colors.backgroundAccentTwo },
+          ]}
+        />
+      </View>
+
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <ScrollView
           contentContainerStyle={[
@@ -123,26 +145,53 @@ export default function NegocioIndexScreen() {
           ]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Barra de navegación superior con botón Atrás */}
+          {/* Barra de navegación superior con botón Atrás y botón Tienda */}
           <FadeInView delay={0}>
             <View style={styles.navBar}>
               <BackButton onPress={goBack} />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Ajustes de Mi negocio"
-                onPress={() => router.push('/negocio/ajustes' as never)}
-                style={[
-                  styles.settingsButton,
-                  {
-                    backgroundColor: theme.colors.inputBackground,
-                    borderColor: theme.colors.separator,
-                  },
-                ]}
-              >
-                <Text style={[styles.settingsIcon, { color: theme.colors.text }]}>
-                  ⚙
-                </Text>
-              </Pressable>
+              <View style={styles.navActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Abrir Mi Tienda y Catálogo"
+                  onPress={() => router.push('/negocio/tienda' as any)}
+                  style={({ pressed }) => [
+                    styles.storeNavButton,
+                    {
+                      backgroundColor: theme.colors.accentSoft,
+                      borderColor: theme.colors.accent,
+                      opacity: pressed ? 0.85 : 1,
+                      transform: [
+                        { scale: pressed && !theme.reduceMotion ? 0.96 : 1 },
+                      ],
+                    },
+                  ]}
+                >
+                  <Text style={styles.storeNavIcon}>🛍️</Text>
+                  <Text style={[styles.storeNavText, { color: theme.colors.accent }]}>
+                    Tienda
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Ajustes de Mi negocio"
+                  onPress={() => router.push('/negocio/ajustes' as never)}
+                  style={({ pressed }) => [
+                    styles.settingsButton,
+                    {
+                      backgroundColor: theme.colors.inputBackground,
+                      borderColor: theme.colors.separator,
+                      opacity: pressed ? 0.85 : 1,
+                      transform: [
+                        { scale: pressed && !theme.reduceMotion ? 0.96 : 1 },
+                      ],
+                    },
+                  ]}
+                >
+                  <Text style={[styles.settingsIcon, { color: theme.colors.text }]}>
+                    ⚙
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           </FadeInView>
 
@@ -155,6 +204,73 @@ export default function NegocioIndexScreen() {
                 Mi negocio
               </Text>
             </View>
+          </FadeInView>
+
+          {/* Banner destacado para entrar a la Tienda / Catálogo */}
+          <FadeInView delay={70}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Ir a Mi Tienda y Catálogo"
+              accessibilityHint="Ver catálogo con ID, precios y compartir en PDF"
+              onPress={() => router.push('/negocio/tienda' as any)}
+              style={({ pressed }) => [
+                pressed && !theme.reduceMotion && {
+                  opacity: 0.92,
+                  transform: [{ scale: 0.99 }],
+                },
+              ]}
+            >
+              <GlassCard
+                intensity={48}
+                contentStyle={styles.storeBannerContent}
+              >
+                <View style={styles.storeBannerLeft}>
+                  <View
+                    style={[
+                      styles.storeIconContainer,
+                      { backgroundColor: theme.colors.accentSoft },
+                    ]}
+                  >
+                    <Text style={styles.storeIcon}>🛍️</Text>
+                  </View>
+                  <View style={styles.storeBannerText}>
+                    <View style={styles.storeBannerTitleRow}>
+                      <Text style={[styles.storeBannerTitle, { color: theme.colors.text }]}>
+                        Mi Tienda & Catálogo
+                      </Text>
+                      <View
+                        style={[
+                          styles.storeBadge,
+                          { backgroundColor: theme.colors.accentSoft },
+                        ]}
+                      >
+                        <Text style={[styles.storeBadgeText, { color: theme.colors.accent }]}>
+                          {catalogItemsCount} en catálogo
+                        </Text>
+                      </View>
+                    </View>
+                    <Text
+                      style={[
+                        styles.storeBannerSubtitle,
+                        { color: theme.colors.textSecondary },
+                      ]}
+                    >
+                      Exporta en PDF y comparte fichas de producto con ID
+                    </Text>
+                  </View>
+                </View>
+                <View
+                  style={[
+                    styles.storeArrowWrap,
+                    { backgroundColor: theme.colors.accentSoft },
+                  ]}
+                >
+                  <Text style={[styles.storeBannerArrow, { color: theme.colors.accent }]}>
+                    →
+                  </Text>
+                </View>
+              </GlassCard>
+            </Pressable>
           </FadeInView>
 
           <FadeInView delay={90}>
@@ -254,7 +370,7 @@ export default function NegocioIndexScreen() {
                 >
                   <View style={styles.goalHeader}>
                     <Text style={[styles.goalTitle, { color: theme.colors.text }]}>
-                      Meta diaria
+                      Meta del negocio
                     </Text>
                     <Text
                       style={[
@@ -262,16 +378,15 @@ export default function NegocioIndexScreen() {
                         {
                           color: totals.goalReached
                             ? theme.colors.success
-                            : theme.colors.warning,
+                            : theme.colors.accent,
                         },
                       ]}
                     >
                       {totals.goalReached
-                        ? '🎉 ¡Meta cumplida!'
-                        : `Faltan ${formatCOP(Math.round(totals.remainingToGoal))}`}
+                        ? '¡Alcanzada!'
+                        : `${Math.round(totals.goalPct * 100)}%`}
                     </Text>
                   </View>
-
                   <View
                     style={[
                       styles.goalProgressTrack,
@@ -282,7 +397,7 @@ export default function NegocioIndexScreen() {
                       style={[
                         styles.goalProgressFill,
                         {
-                          width: `${Math.min(100, Math.round(totals.goalPct))}%`,
+                          width: `${Math.round(totals.goalPct * 100)}%`,
                           backgroundColor: totals.goalReached
                             ? theme.colors.success
                             : theme.colors.accent,
@@ -290,9 +405,14 @@ export default function NegocioIndexScreen() {
                       ]}
                     />
                   </View>
-
-                  <Text style={[styles.goalSub, { color: theme.colors.textMuted }]}>
-                    {formatCOP(Math.round(totals.profit))} de {formatCOP(Math.round(totalDailyGoal))} ({Math.round(totals.goalPct)}%)
+                  <Text style={[styles.goalSub, { color: theme.colors.textSecondary }]}>
+                    {totals.goalReached
+                      ? `Superaste la meta diaria por ${formatCOP(
+                          Math.round(totals.profit - totalDailyGoal),
+                        )}`
+                      : `Faltan ${formatCOP(
+                          Math.round(totals.remainingToGoal),
+                        )} para la meta diaria`}
                   </Text>
                 </View>
               ) : null}
@@ -424,6 +544,9 @@ export default function NegocioIndexScreen() {
                           });
                         }}
                         onDelete={() => confirmDeleteItem(item)}
+                        onToggleCatalog={() =>
+                          void toggleCatalogItem(item.id, !item.inCatalog)
+                        }
                       />
                     );
                   })}
@@ -443,10 +566,27 @@ export default function NegocioIndexScreen() {
   );
 }
 
-
 const styles = StyleSheet.create({
   root: { flex: 1 },
   safe: { flex: 1 },
+  blob: {
+    position: 'absolute',
+    width: 340,
+    height: 340,
+    borderRadius: 170,
+    top: -150,
+    right: -120,
+    opacity: 0.9,
+  },
+  blobSecondary: {
+    position: 'absolute',
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    bottom: -100,
+    left: -130,
+    opacity: 0.8,
+  },
   scrollContent: {
     width: '100%',
   },
@@ -478,20 +618,110 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
   },
+  navActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  storeNavButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 22,
+    borderWidth: 1,
+    gap: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  storeNavIcon: {
+    fontSize: 16,
+  },
+  storeNavText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
   settingsButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  settingsIcon: {
+    fontSize: 20,
+    lineHeight: 24,
+  },
+  header: {
+    gap: 4,
+  },
+  storeBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  storeBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    flex: 1,
+  },
+  storeIconContainer: {
+    width: 46,
+    height: 46,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  settingsIcon: {
-    fontSize: 22,
-    lineHeight: 26,
+  storeIcon: {
+    fontSize: 24,
   },
-  header: {
-    gap: 2,
+  storeBannerText: {
+    flex: 1,
+    gap: 4,
+  },
+  storeBannerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  storeBannerTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  storeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  storeBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  storeBannerSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  storeArrowWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  storeBannerArrow: {
+    fontSize: 18,
+    fontWeight: '800',
   },
   heroCardContent: {
     gap: 16,
@@ -599,5 +829,4 @@ const styles = StyleSheet.create({
   itemsContainer: {
     gap: 14,
   },
-
 });

@@ -48,12 +48,14 @@ export default function NuevoNegocioScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [pricePerUnit, setPricePerUnit] = useState(0);
   const [investment, setInvestment] = useState(0);
+  const [inCatalog, setInCatalog] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadingImage, setLoadingImage] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const isProduct = type === 'product';
   const lastStep = isProduct ? STEPS.length : STEPS.length - 1;
+
   function goBack() {
     if (step > 1) {
       setStep((current) => current - 1);
@@ -153,6 +155,7 @@ export default function NuevoNegocioScreen() {
         dailyGoal: 0,
         goalAmount: 0,
         goalPeriod: 'daily',
+        inCatalog,
       });
       router.replace('/negocio');
     } catch (error) {
@@ -245,6 +248,40 @@ export default function NuevoNegocioScreen() {
           maxLength={500}
         />
       </Field>
+
+      <Pressable
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: inCatalog }}
+        accessibilityLabel="Mostrar en catálogo de mi tienda"
+        onPress={() => setInCatalog((prev) => !prev)}
+        style={[
+          styles.catalogToggleRow,
+          {
+            backgroundColor: inCatalog ? theme.colors.accentSoft : theme.colors.inputBackground,
+            borderColor: inCatalog ? theme.colors.accent : theme.colors.separator,
+          },
+        ]}
+      >
+        <View style={styles.catalogToggleTextCol}>
+          <Text style={[styles.catalogToggleTitle, { color: theme.colors.text }]}>
+            🛍️ Mostrar en mi catálogo
+          </Text>
+          <Text style={[styles.catalogToggleSubtitle, { color: theme.colors.textSecondary }]}>
+            {inCatalog
+              ? 'Visible en tu tienda para compartir por link o WhatsApp.'
+              : 'Oculto. Solo para tus cálculos internos de negocio.'}
+          </Text>
+        </View>
+        <View
+          style={[
+            styles.checkboxBase,
+            inCatalog && { backgroundColor: theme.colors.accent },
+            { borderColor: inCatalog ? theme.colors.accent : theme.colors.separator },
+          ]}
+        >
+          {inCatalog && <Text style={styles.checkmark}>✓</Text>}
+        </View>
+      </Pressable>
     </GlassCard>,
 
     <GlassCard key="image" contentStyle={styles.imageCard}>
@@ -538,6 +575,40 @@ const styles = StyleSheet.create({
   descriptionInput: {
     minHeight: 110,
     textAlignVertical: 'top',
+  },
+  catalogToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 12,
+  },
+  catalogToggleTextCol: {
+    flex: 1,
+    gap: 4,
+  },
+  catalogToggleTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  catalogToggleSubtitle: {
+    fontSize: 13,
+    lineHeight: 17,
+  },
+  checkboxBase: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkmark: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
   },
   imageCard: {
     alignItems: 'stretch',

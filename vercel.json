@@ -1,0 +1,6 @@
+{
+  "buildCommand": "npm install && npx expo export -p web",
+  "outputDirectory": "dist",
+  "framework": null,
+  "regions": ["iad1"]
+}

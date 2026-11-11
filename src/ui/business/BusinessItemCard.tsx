@@ -12,11 +12,13 @@ export function BusinessItemCard({
   calculation,
   onEdit,
   onDelete,
+  onToggleCatalog,
 }: {
   item: BusinessItem;
   calculation?: BusinessCalculation;
   onEdit: () => void;
   onDelete: () => void;
+  onToggleCatalog?: () => void;
 }) {
   const theme = useTheme();
   const isProduct = item.type === 'product';
@@ -27,27 +29,65 @@ export function BusinessItemCard({
   return (
     <GlassCard contentStyle={styles.cardContent}>
       <View style={styles.cardTopRow}>
-        <View
-          style={[
-            styles.typeBadge,
-            {
-              backgroundColor: isProduct
-                ? theme.colors.accentSoft
-                : theme.colors.successSoft,
-            },
-          ]}
-        >
-          <Text
+        <View style={styles.badgeRow}>
+          <View
             style={[
-              styles.typeBadgeText,
+              styles.typeBadge,
               {
-                color: isProduct ? theme.colors.accent : theme.colors.success,
+                backgroundColor: isProduct
+                  ? theme.colors.accentSoft
+                  : theme.colors.successSoft,
               },
             ]}
           >
-            {isProduct ? '📦 Producto' : '🚗 Servicio'}
-          </Text>
+            <Text
+              style={[
+                styles.typeBadgeText,
+                {
+                  color: isProduct ? theme.colors.accent : theme.colors.success,
+                },
+              ]}
+            >
+              {isProduct ? '📦 Producto' : '🚗 Servicio'}
+            </Text>
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              item.inCatalog
+                ? 'Visible en tienda. Toca para ocultar'
+                : 'Oculto en tienda. Toca para mostrar'
+            }
+            disabled={!onToggleCatalog}
+            onPress={onToggleCatalog}
+            style={[
+              styles.catalogBadge,
+              {
+                backgroundColor: item.inCatalog
+                  ? theme.colors.surfaceStrong
+                  : theme.colors.inputBackground,
+                borderColor: item.inCatalog
+                  ? theme.colors.separator
+                  : 'transparent',
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.catalogBadgeText,
+                {
+                  color: item.inCatalog
+                    ? theme.colors.accent
+                    : theme.colors.textMuted,
+                },
+              ]}
+            >
+              {item.inCatalog ? '🛍️ En catálogo' : '👁️ Oculto'}
+            </Text>
+          </Pressable>
         </View>
+
         <View style={styles.profitBadge}>
           <Text style={[styles.profitLabel, { color: theme.colors.textMuted }]}>
             {profit < 0 ? 'Pérdida' : 'Ganancia'}
@@ -100,16 +140,19 @@ export function BusinessItemCard({
       </View>
 
       <View style={styles.detailsGrid}>
-        <Detail label="Precio" value={formatCOP(Math.round(item.pricePerUnit))} />
         <Detail
-          label="Cantidad total"
+          label="Precio unidad"
+          value={formatCOP(Math.round(item.pricePerUnit))}
+        />
+        <Detail
+          label="Cantidad"
           value={`${item.quantity} ${
-            isProduct
-              ? item.quantity === 1
+            item.quantity === 1
+              ? isProduct
                 ? 'unidad'
-                : 'unidades'
-              : item.quantity === 1
-                ? 'servicio'
+                : 'servicio'
+              : isProduct
+                ? 'unidades'
                 : 'servicios'
           }`}
         />
@@ -191,8 +234,12 @@ function ActionButton({
       style={[
         styles.actionButton,
         {
-          borderColor: theme.colors.separator,
-          backgroundColor: theme.colors.inputBackground,
+          backgroundColor: destructive
+            ? theme.colors.dangerSoft
+            : theme.colors.inputBackground,
+          borderColor: destructive
+            ? theme.colors.danger
+            : theme.colors.separator,
         },
       ]}
     >
@@ -217,6 +264,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   typeBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -225,6 +277,16 @@ const styles = StyleSheet.create({
   typeBadgeText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  catalogBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  catalogBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   profitBadge: {
     alignItems: 'flex-end',

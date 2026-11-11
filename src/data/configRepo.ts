@@ -147,7 +147,7 @@ export async function clearAllData(db: Database): Promise<string[]> {
     if (existingTables.has('business_settings')) {
       await db.runAsync(
         `UPDATE business_settings
-         SET goal_amount = 0, goal_period = 'daily'
+         SET goal_amount = 0, goal_period = 'daily', store_name = '', seller_name = '', seller_phone = '', seller_city = '', seller_notes = ''
          WHERE id = 1`,
       );
     }

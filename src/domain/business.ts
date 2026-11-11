@@ -1,3 +1,5 @@
+import { formatCOP } from './money';
+
 /**
  * Cálculos de negocio para "¿Me alcanza?".
  *
@@ -8,6 +10,14 @@
 
 export type BusinessType = 'product' | 'service';
 export type BusinessGoalPeriod = 'daily' | 'monthly' | 'yearly';
+
+export interface BusinessSellerProfile {
+  storeName: string;
+  sellerName: string;
+  sellerPhone: string;
+  sellerCity: string;
+  sellerNotes: string;
+}
 
 export function normalizeBusinessGoal(
   amount: number,
@@ -40,6 +50,8 @@ export interface BusinessItem {
   description: string;
   /** URI local opcional de la imagen. */
   imageUri: string | null;
+  /** Si el producto o servicio está visible en el catálogo de la tienda. */
+  inCatalog: boolean;
   /** Fecha de creación como epoch en milisegundos. */
   createdAt: number;
   /** Fecha de última actualización como epoch en milisegundos. */
@@ -57,6 +69,7 @@ export interface NewBusinessItem {
   goalPeriod?: BusinessGoalPeriod;
   description?: string;
   imageUri?: string | null;
+  inCatalog?: boolean;
 }
 
 export interface BusinessCalculation {
@@ -179,4 +192,111 @@ export function sumBusinessCalculations(
       profitPerUnit: 0,
     },
   );
+}
+
+/** Limpia y normaliza números de teléfono para enlaces de WhatsApp. */
+export function normalizePhoneForWhatsApp(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (!digits) return '';
+  // Si tiene 10 dígitos (típico celular en Colombia que empieza por 3) agregamos código de país 57
+  if (digits.length === 10 && digits.startsWith('3')) {
+    return `57${digits}`;
+  }
+  return digits;
+}
+
+/** Construye un enlace directo de WhatsApp con mensaje predeterminado. */
+export function createWhatsAppChatUrl(phone: string, message: string): string {
+  const clean = normalizePhoneForWhatsApp(phone);
+  const encoded = encodeURIComponent(message);
+  return clean ? `https://wa.me/${clean}?text=${encoded}` : '';
+}
+
+/** Formatea la ficha compartible de un producto con información del vendedor e ID. */
+export function formatProductShareText({
+  item,
+  seller,
+  appLink,
+}: {
+  item: BusinessItem;
+  seller?: Partial<BusinessSellerProfile>;
+  appLink?: string;
+}): string {
+  const isProduct = item.type === 'product';
+  const typeEmoji = isProduct ? '📦' : '🚗';
+  const lines: string[] = [
+    `🛍️ *${item.name}*`,
+    `🏷️ *ID de referencia:* ${item.id}`,
+    `💰 *Precio:* ${formatCOP(item.pricePerUnit)}`,
+    `${typeEmoji} *Tipo:* ${isProduct ? 'Producto' : 'Servicio'}`,
+  ];
+
+  if (item.description) {
+    lines.push(`📝 *Detalles:* ${item.description}`);
+  }
+
+  const sellerParts: string[] = [];
+  if (seller?.storeName) sellerParts.push(`🏪 *Tienda:* ${seller.storeName}`);
+  if (seller?.sellerName) sellerParts.push(`👤 *Vendedor:* ${seller.sellerName}`);
+  if (seller?.sellerCity) sellerParts.push(`📍 *Ubicación:* ${seller.sellerCity}`);
+  if (seller?.sellerNotes) sellerParts.push(`ℹ️ ${seller.sellerNotes}`);
+
+  if (sellerParts.length > 0) {
+    lines.push('', '--- Vendedor ---', ...sellerParts);
+  }
+
+  if (seller?.sellerPhone) {
+    const defaultMsg = `Hola! Me interesa el producto "${item.name}" (ID: ${item.id}) por ${formatCOP(item.pricePerUnit)}. ¿Sigue disponible?`;
+    const waUrl = createWhatsAppChatUrl(seller.sellerPhone, defaultMsg);
+    if (waUrl) {
+      lines.push('', `💬 *Pedir directamente por WhatsApp:*`, waUrl);
+    }
+  }
+
+  if (appLink) {
+    lines.push('', `📲 *Ver en el catálogo:*`, appLink);
+  }
+
+  return lines.join('\n');
+}
+
+/** Formatea el catálogo completo en un resumen de texto compartible. */
+export function formatCatalogShareText({
+  items,
+  seller,
+  appLink,
+}: {
+  items: BusinessItem[];
+  seller?: Partial<BusinessSellerProfile>;
+  appLink?: string;
+}): string {
+  const storeTitle = seller?.storeName ? `🏪 *${seller.storeName}*` : '🛍️ *Catálogo de Productos*';
+  const lines: string[] = [storeTitle];
+
+  if (seller?.sellerName) lines.push(`👤 Vendedor: ${seller.sellerName}`);
+  if (seller?.sellerCity) lines.push(`📍 Ubicación: ${seller.sellerCity}`);
+  if (seller?.sellerNotes) lines.push(`ℹ️ ${seller.sellerNotes}`);
+
+  lines.push('', `📦 *Productos disponibles (${items.length}):*`, '');
+
+  items.forEach((item, index) => {
+    lines.push(
+      `${index + 1}. *${item.name}* — ${formatCOP(item.pricePerUnit)}`,
+      `   ID: \`${item.id}\`${item.description ? ` • ${item.description}` : ''}`,
+    );
+  });
+
+  if (seller?.sellerPhone) {
+    const defaultMsg = `Hola! Estuve viendo su catálogo y me gustaría hacer un pedido.`;
+    const waUrl = createWhatsAppChatUrl(seller.sellerPhone, defaultMsg);
+    if (waUrl) {
+      lines.push('', `💬 *Contacto WhatsApp:*`, waUrl);
+    }
+  }
+
+  if (appLink) {
+    lines.push('', `📲 *Abrir catálogo completo en app:*`, appLink);
+  }
+
+  return lines.join('\n');
 }

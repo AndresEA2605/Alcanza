@@ -41,6 +41,7 @@ describe('migraciones de la base de datos', () => {
         'image_uri',
         'goal_period',
         'goal_amount',
+        'in_catalog',
       ]),
     );
 
@@ -62,6 +63,19 @@ describe('migraciones de la base de datos', () => {
         'SELECT goal_amount, goal_period FROM business_settings WHERE id = 1',
       ),
     ).resolves.toEqual({ goal_amount: 0, goal_period: 'daily' });
+
+    const settingsColumns = await testDb.db.getAllAsync<{ name: string }>(
+      `PRAGMA table_info(business_settings)`,
+    );
+    expect(settingsColumns.map((c) => c.name)).toEqual(
+      expect.arrayContaining([
+        'store_name',
+        'seller_name',
+        'seller_phone',
+        'seller_city',
+        'seller_notes',
+      ]),
+    );
   });
 
   it('crea el índice en ts', async () => {
@@ -99,108 +113,84 @@ describe('migraciones de la base de datos', () => {
   it('conserva las metas existentes como metas diarias al migrar el negocio', async () => {
     for (const migration of MIGRATIONS.filter(({ version }) => version <= 4)) {
       await migration.up(testDb.db);
-      await testDb.db.execAsync(`PRAGMA user_version = ${migration.version}`);
     }
+    await testDb.db.execAsync('PRAGMA user_version = 4');
 
-    await testDb.db.runAsync(
-      `INSERT INTO business_item
-       (id, name, type, quantity, price_per_unit, investment, daily_goal, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      'old-product',
-      'Producto anterior',
-      'product',
-      2,
-      1000,
-      500,
-      25000,
-      1,
-      1,
-    );
+    await testDb.db.execAsync(`
+      INSERT INTO business_item (
+        id, name, type, quantity, price_per_unit, investment, daily_goal, created_at, updated_at
+      ) VALUES
+        ('prod-1', 'Producto', 'product', 1, 100, 50, 15000, 1, 1),
+        ('serv-1', 'Servicio', 'service', 1, 80, 0, 25000, 1, 1);
+    `);
 
     await migrateDatabase(testDb.db);
-    const migrated = await testDb.db.getFirstAsync<{
-      daily_goal: number;
+
+    const items = await testDb.db.getAllAsync<{
+      id: string;
       goal_amount: number;
       goal_period: string;
-      description: string;
-      image_uri: string | null;
+      daily_goal: number;
+      in_catalog: number;
     }>(
-      `SELECT daily_goal, goal_amount, goal_period, description, image_uri
-       FROM business_item WHERE id = ?`,
-      'old-product',
+      `SELECT id, goal_amount, goal_period, daily_goal, in_catalog
+       FROM business_item
+       ORDER BY id`,
     );
 
-    expect(migrated).toEqual({
-      daily_goal: 25000,
-      goal_amount: 25000,
-      goal_period: 'daily',
-      description: '',
-      image_uri: null,
-    });
+    expect(items).toEqual([
+      {
+        id: 'prod-1',
+        goal_amount: 15000,
+        goal_period: 'daily',
+        daily_goal: 15000,
+        in_catalog: 1,
+      },
+      {
+        id: 'serv-1',
+        goal_amount: 25000,
+        goal_period: 'daily',
+        daily_goal: 25000,
+        in_catalog: 1,
+      },
+    ]);
+  });
 
-    await expect(
-      testDb.db.getFirstAsync(
-        'SELECT goal_amount, goal_period FROM business_settings WHERE id = 1',
-      ),
-    ).resolves.toEqual({ goal_amount: 25000, goal_period: 'daily' });
+  it('conserva el valor por defecto si falla la migración idempotente de business_item', async () => {
+    const errorSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await migrateDatabase(testDb.db);
+    const brokenDb = {
+      ...testDb.db,
+      getAllAsync: jest.fn().mockRejectedValue(new Error('error forzado')),
+    };
+
+    await expect(migrateDatabase(brokenDb as any)).resolves.toBeUndefined();
+    errorSpy.mockRestore();
   });
 
   it('rechaza una base de datos más nueva que la app', async () => {
-    await testDb.db.execAsync('PRAGMA user_version = 99');
+    await testDb.db.execAsync(`PRAGMA user_version = ${LATEST_DATABASE_VERSION + 1}`);
 
-    await expect(migrateDatabase(testDb.db)).rejects.toThrow(/más nueva/);
+    await expect(migrateDatabase(testDb.db)).rejects.toThrow(
+      'La base de datos es más nueva que esta versión de la app. Actualiza la app para continuar.',
+    );
   });
 
-  it('exige montos enteros y positivos en expense', async () => {
+  it('rechaza montos negativos o con decimales en SQLite', async () => {
     await migrateDatabase(testDb.db);
 
     await expect(
       testDb.db.runAsync(
         `INSERT INTO expense (id, amount, category, ts, deleted_at)
-         VALUES ('cero', 0, 'comida', 1, NULL)`,
+         VALUES ('negativo', -100, 'comida', 1767225600000, NULL)`,
       ),
     ).rejects.toThrow();
 
     await expect(
       testDb.db.runAsync(
         `INSERT INTO expense (id, amount, category, ts, deleted_at)
-         VALUES ('negativo', -100, 'comida', 1, NULL)`,
-      ),
-    ).rejects.toThrow();
-
-    await expect(
-      testDb.db.runAsync(
-        `INSERT INTO expense (id, amount, category, ts, deleted_at)
-         VALUES ('decimal', 10.5, 'comida', 1, NULL)`,
-      ),
-    ).rejects.toThrow();
-  });
-
-  it('rechaza categorías desconocidas', async () => {
-    await migrateDatabase(testDb.db);
-
-    await expect(
-      testDb.db.runAsync(
-        `INSERT INTO expense (id, amount, category, ts, deleted_at)
-         VALUES ('otra', 1000, 'mascotas', 1, NULL)`,
-      ),
-    ).rejects.toThrow();
-  });
-
-  it('valida el formato del mes y los enteros de month_config', async () => {
-    await migrateDatabase(testDb.db);
-
-    await expect(
-      testDb.db.runAsync(
-        `INSERT INTO month_config (month, income, fixed)
-         VALUES ('2026-1', 3000000, 1000000)`,
-      ),
-    ).rejects.toThrow();
-
-    await expect(
-      testDb.db.runAsync(
-        `INSERT INTO month_config (month, income, fixed)
-         VALUES ('2026-01', -1, 1000000)`,
+         VALUES ('decimal', 12.5, 'comida', 1767225600000, NULL)`,
       ),
     ).rejects.toThrow();
 

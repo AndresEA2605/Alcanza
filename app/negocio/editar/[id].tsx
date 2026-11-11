@@ -104,6 +104,7 @@ function EditForm({
   const [quantity, setQuantity] = useState(item.quantity);
   const [pricePerUnit, setPricePerUnit] = useState(item.pricePerUnit);
   const [investment, setInvestment] = useState(item.investment);
+  const [inCatalog, setInCatalog] = useState(item.inCatalog ?? true);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorState] = useState<string | null>(null);
 
@@ -145,6 +146,7 @@ function EditForm({
         quantity: quantityRef.current,
         pricePerUnit: priceRef.current,
         investment: type === 'product' ? investmentRef.current : 0,
+        inCatalog,
       });
       router.replace('/negocio');
     } catch {
@@ -337,6 +339,40 @@ function EditForm({
               </View>
             )}
 
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: inCatalog }}
+              accessibilityLabel="Mostrar en catálogo de mi tienda"
+              onPress={() => setInCatalog((prev) => !prev)}
+              style={[
+                s.catalogToggleRow,
+                {
+                  backgroundColor: inCatalog ? theme.colors.accentSoft : theme.colors.inputBackground,
+                  borderColor: inCatalog ? theme.colors.accent : theme.colors.separator,
+                },
+              ]}
+            >
+              <View style={s.catalogToggleTextCol}>
+                <Text style={[s.catalogToggleTitle, { color: theme.colors.text }]}>
+                  🛍️ Mostrar en mi catálogo
+                </Text>
+                <Text style={[s.catalogToggleSubtitle, { color: theme.colors.textSecondary }]}>
+                  {inCatalog
+                    ? 'Visible en tu tienda y listo para compartir.'
+                    : 'Oculto de tu tienda pública.'}
+                </Text>
+              </View>
+              <View
+                style={[
+                  s.checkboxBase,
+                  inCatalog && { backgroundColor: theme.colors.accent },
+                  { borderColor: inCatalog ? theme.colors.accent : theme.colors.separator },
+                ]}
+              >
+                {inCatalog && <Text style={s.checkmark}>✓</Text>}
+              </View>
+            </Pressable>
+
             {errorMessage ? (
               <FadeInView delay={300}>
                 <Text
@@ -504,6 +540,40 @@ function styles(theme: ReturnType<typeof useTheme>) {
     descriptionInput: {
       minHeight: 92,
       textAlignVertical: 'top',
+    },
+    catalogToggleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: 16,
+      borderRadius: 14,
+      borderWidth: 1,
+      gap: 12,
+    },
+    catalogToggleTextCol: {
+      flex: 1,
+      gap: 4,
+    },
+    catalogToggleTitle: {
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    catalogToggleSubtitle: {
+      fontSize: 13,
+      lineHeight: 17,
+    },
+    checkboxBase: {
+      width: 24,
+      height: 24,
+      borderRadius: 6,
+      borderWidth: 2,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    checkmark: {
+      color: '#FFFFFF',
+      fontSize: 14,
+      fontWeight: '800',
     },
     bottom: {
       gap: 4,

@@ -198,12 +198,59 @@ export const MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 8,
+    up: async (db) => {
+      // 1. Agregar columna in_catalog a business_item si no existe
+      const itemCols = await db.getAllAsync<{ name: string }>(
+        'PRAGMA table_info(business_item)',
+      );
+      const existingItemCols = new Set(itemCols.map((c) => c.name));
+      if (!existingItemCols.has('in_catalog')) {
+        await db.execAsync(
+          'ALTER TABLE business_item ADD COLUMN in_catalog INTEGER NOT NULL DEFAULT 1 CHECK (in_catalog IN (0, 1))',
+        );
+      }
+
+      // 2. Asegurar columnas de vendedor/tienda en business_settings
+      const settingsCols = await db.getAllAsync<{ name: string }>(
+        'PRAGMA table_info(business_settings)',
+      );
+      const existingSettingsCols = new Set(settingsCols.map((c) => c.name));
+
+      if (!existingSettingsCols.has('store_name')) {
+        await db.execAsync(
+          "ALTER TABLE business_settings ADD COLUMN store_name TEXT NOT NULL DEFAULT ''",
+        );
+      }
+      if (!existingSettingsCols.has('seller_name')) {
+        await db.execAsync(
+          "ALTER TABLE business_settings ADD COLUMN seller_name TEXT NOT NULL DEFAULT ''",
+        );
+      }
+      if (!existingSettingsCols.has('seller_phone')) {
+        await db.execAsync(
+          "ALTER TABLE business_settings ADD COLUMN seller_phone TEXT NOT NULL DEFAULT ''",
+        );
+      }
+      if (!existingSettingsCols.has('seller_city')) {
+        await db.execAsync(
+          "ALTER TABLE business_settings ADD COLUMN seller_city TEXT NOT NULL DEFAULT ''",
+        );
+      }
+      if (!existingSettingsCols.has('seller_notes')) {
+        await db.execAsync(
+          "ALTER TABLE business_settings ADD COLUMN seller_notes TEXT NOT NULL DEFAULT ''",
+        );
+      }
+    },
+  },
 ];
 
 export const LATEST_DATABASE_VERSION =
   Math.max(
     MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0,
-    7,
+    8,
   );
 
 /**
@@ -273,7 +320,8 @@ async function migrateBusinessItemSchema(db: Database): Promise<void> {
       existing.has('image_uri') &&
       existing.has('goal_period') &&
       existing.has('goal_amount') &&
-      currentVersion >= 5
+      existing.has('in_catalog') &&
+      currentVersion >= 8
     ) {
       return;
     }
@@ -292,6 +340,7 @@ async function migrateBusinessItemSchema(db: Database): Promise<void> {
         daily_goal INTEGER NOT NULL DEFAULT 0 CHECK (typeof(daily_goal) = 'integer' AND daily_goal >= 0),
         description TEXT NOT NULL DEFAULT '',
         image_uri TEXT NULL,
+        in_catalog INTEGER NOT NULL DEFAULT 1 CHECK (in_catalog IN (0, 1)),
         goal_period TEXT NOT NULL DEFAULT 'daily' CHECK (goal_period IN ('daily', 'monthly', 'yearly')),
         goal_amount INTEGER NOT NULL DEFAULT 0 CHECK (typeof(goal_amount) = 'integer' AND goal_amount >= 0),
         created_at INTEGER NOT NULL DEFAULT 0,

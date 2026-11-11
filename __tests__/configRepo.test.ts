@@ -58,15 +58,22 @@ describe('configRepo', () => {
     });
   });
 
-  it('guarda y recupera la meta general de Mi negocio', async () => {
+  it('guarda y recupera la meta general y perfil de Mi negocio', async () => {
     await saveBusinessSettings(testDb.db, {
       goalAmount: 900_000,
       goalPeriod: 'monthly',
+      storeName: 'Mi Tienda',
+      sellerPhone: '3001234567',
     });
 
     await expect(getBusinessSettings(testDb.db)).resolves.toEqual({
       goalAmount: 900_000,
       goalPeriod: 'monthly',
+      storeName: 'Mi Tienda',
+      sellerName: '',
+      sellerPhone: '3001234567',
+      sellerCity: '',
+      sellerNotes: '',
     });
   });
 
@@ -192,6 +199,11 @@ describe('configRepo', () => {
     await expect(getBusinessSettings(testDb.db)).resolves.toEqual({
       goalAmount: 0,
       goalPeriod: 'daily',
+      storeName: '',
+      sellerName: '',
+      sellerPhone: '',
+      sellerCity: '',
+      sellerNotes: '',
     });
 
     for (const table of [

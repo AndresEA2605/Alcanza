@@ -15,15 +15,20 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 });
 
 // Las notificaciones recibidas se muestran sin interacción adicional.
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-  }),
-});
+// En web el handler puede no estar disponible; no bloqueamos la app por ello.
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+    }),
+  });
+} catch {
+  // Notificaciones no disponibles en este entorno.
+}
 
 export default function RootLayout() {
   return (

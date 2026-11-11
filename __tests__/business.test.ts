@@ -1,7 +1,12 @@
 import {
   calculateBusiness,
+  createWhatsAppChatUrl,
+  formatCatalogShareText,
+  formatProductShareText,
   normalizeBusinessGoal,
+  normalizePhoneForWhatsApp,
   sumBusinessCalculations,
+  type BusinessItem,
 } from '../src/domain/business';
 
 describe('cálculos de negocio', () => {
@@ -107,5 +112,112 @@ describe('cálculos de negocio', () => {
     expect(total.profit).toBe(1500 + 10000);
     expect(total.freeProfit).toBe(1500 + 10000);
     expect(total.reinvestment).toBe(1500 + 10000);
+  });
+});
+
+describe('utilidades de compartir catálogo y producto', () => {
+  it('normaliza números de celular para WhatsApp agregando código 57 a celulares colombianos', () => {
+    expect(normalizePhoneForWhatsApp('300 123 4567')).toBe('573001234567');
+    expect(normalizePhoneForWhatsApp('+57 310 987 6543')).toBe('573109876543');
+    expect(normalizePhoneForWhatsApp('15551234567')).toBe('15551234567');
+  });
+
+  it('crea enlace de chat directo de WhatsApp', () => {
+    const url = createWhatsAppChatUrl('3001234567', 'Hola! Me interesa');
+    expect(url).toBe('https://wa.me/573001234567?text=Hola!%20Me%20interesa');
+  });
+
+  it('formatea texto de producto con ID, precio, información de vendedor y links', () => {
+    const item: BusinessItem = {
+      id: 'biz_test_123',
+      name: 'Café Especial',
+      type: 'product',
+      quantity: 10,
+      pricePerUnit: 25000,
+      investment: 150000,
+      dailyGoal: 0,
+      goalAmount: 0,
+      goalPeriod: 'daily',
+      description: 'Café de origen Huila',
+      imageUri: null,
+      inCatalog: true,
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+
+    const text = formatProductShareText({
+      item,
+      seller: {
+        storeName: 'Café Don Pedro',
+        sellerName: 'Pedro Gómez',
+        sellerPhone: '3001234567',
+        sellerCity: 'Pitalito',
+        sellerNotes: 'Envíos a todo el país',
+      },
+      appLink: 'mealcanza://negocio/tienda?id=biz_test_123',
+    });
+
+    expect(text).toContain('Café Especial');
+    expect(text).toContain('*ID de referencia:* biz_test_123');
+    expect(text).toContain('$ 25.000');
+    expect(text).toContain('Café Don Pedro');
+    expect(text).toContain('Pedro Gómez');
+    expect(text).toContain('Pitalito');
+    expect(text).toContain('Envíos a todo el país');
+    expect(text).toContain('https://wa.me/573001234567');
+    expect(text).toContain('mealcanza://negocio/tienda?id=biz_test_123');
+  });
+
+  it('formatea el catálogo completo listando productos con ID y precio', () => {
+    const items: BusinessItem[] = [
+      {
+        id: 'biz_1',
+        name: 'Camisa Lino',
+        type: 'product',
+        quantity: 5,
+        pricePerUnit: 80000,
+        investment: 200000,
+        dailyGoal: 0,
+        goalAmount: 0,
+        goalPeriod: 'daily',
+        description: 'Blanca talla M',
+        imageUri: null,
+        inCatalog: true,
+        createdAt: 1000,
+        updatedAt: 1000,
+      },
+      {
+        id: 'biz_2',
+        name: 'Pantalón Jean',
+        type: 'product',
+        quantity: 3,
+        pricePerUnit: 120000,
+        investment: 180000,
+        dailyGoal: 0,
+        goalAmount: 0,
+        goalPeriod: 'daily',
+        description: 'Azul clásico',
+        imageUri: null,
+        inCatalog: true,
+        createdAt: 1000,
+        updatedAt: 1000,
+      },
+    ];
+
+    const text = formatCatalogShareText({
+      items,
+      seller: {
+        storeName: 'Boutique Elegance',
+        sellerPhone: '3159998877',
+      },
+      appLink: 'mealcanza://negocio/tienda',
+    });
+
+    expect(text).toContain('Boutique Elegance');
+    expect(text).toContain('*Camisa Lino* — $ 80.000');
+    expect(text).toContain('ID: `biz_1`');
+    expect(text).toContain('*Pantalón Jean* — $ 120.000');
+    expect(text).toContain('ID: `biz_2`');
+    expect(text).toContain('https://wa.me/573159998877');
   });
 });

@@ -1,6 +1,10 @@
 {
   "expo": {
-    "platforms": ["ios", "android"],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "name": "¿Me alcanza?",
     "slug": "projects",
     "version": "1.0.0",
@@ -12,7 +16,10 @@
     "ios": {
       "bundleIdentifier": "com.andresea2605.mealcanza",
       "buildNumber": "1",
-      "icon": "./assets/images/icon.png"
+      "icon": "./assets/images/icon.png",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.andresea2605.mealcanza",
@@ -52,7 +59,8 @@
         {
           "useSQLCipher": true
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,

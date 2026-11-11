@@ -30,6 +30,7 @@ interface BusinessItemRow {
   goal_period?: BusinessGoalPeriod;
   description?: string;
   image_uri?: string | null;
+  in_catalog?: number;
   created_at: number;
   updated_at: number;
 }
@@ -47,6 +48,7 @@ function mapBusinessItem(row: BusinessItemRow): BusinessItem {
     goalPeriod: row.goal_period ?? 'daily',
     description: row.description ?? '',
     imageUri: row.image_uri ?? null,
+    inCatalog: row.in_catalog === undefined ? true : Boolean(row.in_catalog),
     createdAt: row.created_at ?? Date.now(),
     updatedAt: row.updated_at ?? Date.now(),
   };
@@ -65,10 +67,11 @@ export async function createBusinessItem(
 ): Promise<BusinessItem> {
   const now = Date.now();
   const id = createBusinessId(now);
+  const inCatalog = input.inCatalog ?? true;
 
   await db.runAsync(
-    `INSERT INTO business_item (id, name, type, quantity, price_per_unit, investment, daily_goal, goal_amount, goal_period, description, image_uri, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO business_item (id, name, type, quantity, price_per_unit, investment, daily_goal, goal_amount, goal_period, description, image_uri, in_catalog, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     input.name,
     input.type,
@@ -83,6 +86,7 @@ export async function createBusinessItem(
     input.goalPeriod ?? 'daily',
     input.description?.trim() ?? '',
     input.imageUri ?? null,
+    inCatalog ? 1 : 0,
     now,
     now,
   );
@@ -102,6 +106,7 @@ export async function createBusinessItem(
     goalPeriod: input.goalPeriod ?? 'daily',
     description: input.description?.trim() ?? '',
     imageUri: input.imageUri ?? null,
+    inCatalog,
     createdAt: now,
     updatedAt: now,
   };
@@ -109,7 +114,7 @@ export async function createBusinessItem(
 
 export async function listBusinessItems(db: Database): Promise<BusinessItem[]> {
   const rows = await db.getAllAsync<BusinessItemRow>(
-    `SELECT id, name, type, quantity, price_per_unit, investment, daily_goal, goal_amount, goal_period, description, image_uri, created_at, updated_at
+    `SELECT id, name, type, quantity, price_per_unit, investment, daily_goal, goal_amount, goal_period, description, image_uri, in_catalog, created_at, updated_at
      FROM business_item
      ORDER BY name COLLATE NOCASE ASC`,
   );
@@ -122,7 +127,7 @@ export async function getBusinessItemById(
   id: string,
 ): Promise<BusinessItem | null> {
   const row = await db.getFirstAsync<BusinessItemRow>(
-    `SELECT id, name, type, quantity, price_per_unit, investment, daily_goal, goal_amount, goal_period, description, image_uri, created_at, updated_at
+    `SELECT id, name, type, quantity, price_per_unit, investment, daily_goal, goal_amount, goal_period, description, image_uri, in_catalog, created_at, updated_at
      FROM business_item
      WHERE id = ?`,
     id,
@@ -171,12 +176,14 @@ export async function updateBusinessItem(
         : existing.description,
     imageUri:
       input.imageUri !== undefined ? input.imageUri : existing.imageUri,
+    inCatalog:
+      input.inCatalog !== undefined ? input.inCatalog : existing.inCatalog,
     updatedAt: now,
   };
 
   await db.runAsync(
     `UPDATE business_item
-     SET name = ?, type = ?, quantity = ?, price_per_unit = ?, investment = ?, daily_goal = ?, goal_amount = ?, goal_period = ?, description = ?, image_uri = ?, updated_at = ?
+     SET name = ?, type = ?, quantity = ?, price_per_unit = ?, investment = ?, daily_goal = ?, goal_amount = ?, goal_period = ?, description = ?, image_uri = ?, in_catalog = ?, updated_at = ?
      WHERE id = ?`,
     updated.name,
     updated.type,
@@ -188,11 +195,20 @@ export async function updateBusinessItem(
     updated.goalPeriod,
     updated.description,
     updated.imageUri,
+    updated.inCatalog ? 1 : 0,
     updated.updatedAt,
     id,
   );
 
   return updated;
+}
+
+export async function toggleBusinessItemCatalog(
+  db: Database,
+  id: string,
+  inCatalog: boolean,
+): Promise<BusinessItem | null> {
+  return updateBusinessItem(db, id, { inCatalog });
 }
 
 export async function deleteBusinessItem(

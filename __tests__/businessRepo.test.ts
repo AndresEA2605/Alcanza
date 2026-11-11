@@ -1,6 +1,7 @@
 import {
   createBusinessItem,
   listBusinessItems,
+  toggleBusinessItemCatalog,
   updateBusinessItem,
 } from '../src/data/businessRepo';
 import { migrateDatabase } from '../src/data/migrations';
@@ -41,6 +42,7 @@ describe('businessRepo', () => {
       dailyGoal: 10000,
       description: 'Tueste medio',
       imageUri: 'file:///products/cafe.jpg',
+      inCatalog: true,
     });
 
     await updateBusinessItem(testDb.db, created.id, {
@@ -58,7 +60,42 @@ describe('businessRepo', () => {
         dailyGoal: 10000,
         description: '',
         imageUri: null,
+        inCatalog: true,
       }),
     ]);
+  });
+
+  it('permite decidir si un producto va al catálogo o no y alternar su estado', async () => {
+    const itemCatalog = await createBusinessItem(testDb.db, {
+      name: 'Camisa Blanca',
+      type: 'product',
+      quantity: 1,
+      pricePerUnit: 50000,
+      dailyGoal: 0,
+      inCatalog: true,
+    });
+
+    const itemInternalOnly = await createBusinessItem(testDb.db, {
+      name: 'Materia prima interna',
+      type: 'product',
+      quantity: 1,
+      pricePerUnit: 10000,
+      dailyGoal: 0,
+      inCatalog: false,
+    });
+
+    expect(itemCatalog.inCatalog).toBe(true);
+    expect(itemInternalOnly.inCatalog).toBe(false);
+
+    // Alternar visibilidad
+    await toggleBusinessItemCatalog(testDb.db, itemCatalog.id, false);
+    await toggleBusinessItemCatalog(testDb.db, itemInternalOnly.id, true);
+
+    const items = await listBusinessItems(testDb.db);
+    const updatedCatalog = items.find((i) => i.id === itemCatalog.id);
+    const updatedInternal = items.find((i) => i.id === itemInternalOnly.id);
+
+    expect(updatedCatalog?.inCatalog).toBe(false);
+    expect(updatedInternal?.inCatalog).toBe(true);
   });
 });
