@@ -3,7 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
 import { useEffect } from 'react';
-import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, Platform, type ViewStyle } from 'react-native';
 
 import { useBudgetStore } from '../src/store/useBudgetStore';
@@ -45,8 +45,6 @@ function ThemedApp() {
   const status = useBudgetStore((state) => state.status);
   const initialize = useBudgetStore((state) => state.initialize);
   const loadSettings = useSettingsStore((state) => state.load);
-  const insets = useSafeAreaInsets();
-
   const isWeb = Platform.OS === 'web';
 
   useEffect(() => {
@@ -75,34 +73,40 @@ function ThemedApp() {
     };
   }, []);
 
-  // En web móvil: resetear márgenes del body/html y bloquear scroll para que
-  // la app ocupe toda la pantalla sin barras blancas arriba/abajo.
+  // En web móvil: resetear body/html para eliminar barras blancas/negras en los
+  // bordes, aplicar el color de fondo del tema y bloquear scroll/zoom no deseado.
   useEffect(() => {
     if (!isWeb) {
       return;
     }
     const body = document.body;
     const html = document.documentElement;
+    const bg = String(theme.colors.background);
 
-    const prevBodyMargin = body.style.margin;
-    const prevBodyPadding = body.style.padding;
-    const prevBodyOverflow = body.style.overflow;
-    const prevBodyHeight = body.style.height;
-    const prevHtmlMargin = html.style.margin;
-    const prevHtmlPadding = html.style.padding;
-    const prevHtmlOverflow = html.style.overflow;
-    const prevHtmlHeight = html.style.height;
+    const prev = {
+      bodyMargin: body.style.margin,
+      bodyPadding: body.style.padding,
+      bodyOverflow: body.style.overflow,
+      bodyHeight: body.style.height,
+      bodyBg: body.style.backgroundColor,
+      htmlMargin: html.style.margin,
+      htmlPadding: html.style.padding,
+      htmlOverflow: html.style.overflow,
+      htmlHeight: html.style.height,
+      htmlBg: html.style.backgroundColor,
+    };
 
     body.style.margin = '0';
     body.style.padding = '0';
     body.style.overflow = 'hidden';
     body.style.height = '100%';
+    body.style.backgroundColor = bg;
     html.style.margin = '0';
     html.style.padding = '0';
     html.style.overflow = 'hidden';
     html.style.height = '100%';
+    html.style.backgroundColor = bg;
 
-    // Fijar viewport para evitar zoom al tocar inputs en iOS/Android móvil.
     let meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
     if (!meta) {
       meta = document.createElement('meta');
@@ -116,34 +120,26 @@ function ThemedApp() {
     );
 
     return () => {
-      body.style.margin = prevBodyMargin;
-      body.style.padding = prevBodyPadding;
-      body.style.overflow = prevBodyOverflow;
-      body.style.height = prevBodyHeight;
-      html.style.margin = prevHtmlMargin;
-      html.style.padding = prevHtmlPadding;
-      html.style.overflow = prevHtmlOverflow;
-      html.style.height = prevHtmlHeight;
+      body.style.margin = prev.bodyMargin;
+      body.style.padding = prev.bodyPadding;
+      body.style.overflow = prev.bodyOverflow;
+      body.style.height = prev.bodyHeight;
+      body.style.backgroundColor = prev.bodyBg;
+      html.style.margin = prev.htmlMargin;
+      html.style.padding = prev.htmlPadding;
+      html.style.overflow = prev.htmlOverflow;
+      html.style.height = prev.htmlHeight;
+      html.style.backgroundColor = prev.htmlBg;
       if (prevContent) {
         meta.setAttribute('content', prevContent);
       }
     };
-  }, [isWeb]);
+  }, [isWeb, theme.colors.background]);
 
   const containerStyle: ViewStyle = {
+    flex: 1,
     width: '100%',
-    ...(isWeb
-      ? {
-          position: 'fixed',
-          inset: 0,
-          overflow: 'hidden',
-        }
-      : {}),
     backgroundColor: theme.colors.background,
-    paddingTop: insets.top,
-    paddingBottom: insets.bottom,
-    paddingLeft: insets.left,
-    paddingRight: insets.right,
   };
 
   return (
