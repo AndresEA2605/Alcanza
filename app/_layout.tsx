@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
 import { useEffect } from 'react';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { View } from 'react-native';
+import { View, Platform, Dimensions, type ViewStyle } from 'react-native';
 
 import { useBudgetStore } from '../src/store/useBudgetStore';
 import { useSettingsStore } from '../src/store/useSettingsStore';
@@ -16,7 +16,6 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 });
 
 // Las notificaciones recibidas se muestran sin interacción adicional.
-// En web el handler puede no estar disponible; no bloqueamos la app por ello.
 try {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -48,6 +47,9 @@ function ThemedApp() {
   const loadSettings = useSettingsStore((state) => state.load);
   const insets = useSafeAreaInsets();
 
+  const isWeb = Platform.OS === 'web';
+  const screenHeight = Dimensions.get('window').height;
+
   useEffect(() => {
     void initialize();
     void loadSettings();
@@ -74,10 +76,51 @@ function ThemedApp() {
     };
   }, []);
 
-  const containerStyle = {
-    flex: 1,
+  // En web móvil: bloquear scroll del body y fijar viewport para que la app
+  // se comporte como nativa (no se mueve con el teclado, no hace zoom en inputs).
+  useEffect(() => {
+    if (!isWeb) {
+      return;
+    }
+    const body = document.body;
+    const html = document.documentElement;
+    const prevBodyOverflow = body.style.overflow;
+    const prevHtmlOverflow = html.style.overflow;
+    body.style.overflow = 'hidden';
+    html.style.overflow = 'hidden';
+
+    // Fijar viewport para evitar zoom al tocar inputs en iOS/Android móvil.
+    let meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.name = 'viewport';
+      document.head.appendChild(meta);
+    }
+    const prevContent = meta.getAttribute('content');
+    meta.setAttribute(
+      'content',
+      'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no',
+    );
+
+    return () => {
+      body.style.overflow = prevBodyOverflow;
+      html.style.overflow = prevHtmlOverflow;
+      if (prevContent) {
+        meta.setAttribute('content', prevContent);
+      }
+    };
+  }, [isWeb]);
+
+  const containerStyle: ViewStyle = {
     width: '100%',
-    height: '100%',
+    ...(isWeb
+      ? {
+          position: 'relative',
+          height: screenHeight,
+          minHeight: screenHeight,
+          overflow: 'hidden',
+        }
+      : {}),
     backgroundColor: theme.colors.background,
     paddingTop: insets.top,
     paddingBottom: insets.bottom,
@@ -92,7 +135,10 @@ function ThemedApp() {
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: theme.colors.background, flex: 1 },
+            contentStyle: {
+              backgroundColor: theme.colors.background,
+              flex: 1,
+            },
             animation: 'fade',
           }}
         >
