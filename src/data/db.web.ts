@@ -2,18 +2,21 @@
  * Implementación de la base de datos para web.
  *
  * Usa localStorage para persistir tablas como JSON. Implementa la interfaz
- * `Database` definida en `./migrations` para que los repositorios (incomeRepo,
- * expenseRepo, configRepo, etc.) funcionen sin cambios en el navegador.
+ * `Database` definida en `./migrations` y aplica las migraciones al iniciar,
+ * de modo que los repositorios (incomeRepo, expenseRepo, configRepo,
+ * businessRepo, businessSettingsRepo, etc.) funcionen sin cambios en el
+ * navegador.
  *
  * Soporta el subconjunto de SQL que usa la aplicación:
- * - CREATE TABLE / DROP TABLE / ALTER TABLE (no-op para columnas)
- * - INSERT / UPDATE / DELETE
- * - SELECT con WHERE, ORDER BY, LIMIT
- * - PRAGMA table_info, user_version
+ * - CREATE TABLE / DROP TABLE / ALTER TABLE / RENAME TO
+ * - INSERT (incluido INSERT OR IGNORE) / UPDATE / DELETE
+ * - SELECT con WHERE (col = ?, col = 1, col >= ?, col IS NULL, AND),
+ *   ORDER BY, LIMIT
+ * - PRAGMA table_info, PRAGMA user_version
  * - withTransactionAsync
  */
 
-import type { BindValue, Database, RunResult } from './migrations';
+import { MIGRATIONS, type BindValue, type Database, type RunResult } from './migrations';
 
 const STORAGE_PREFIX = 'me-alcanza-web-db:';
 const META_KEY = 'me-alcanza-web-meta';
@@ -102,9 +105,19 @@ function extractTableName(sql: string): string | null {
 }
 
 /**
+ * Convierte un valor bind (puede ser literal o parámetro ?) a su valor real.
+ */
+function resolveParam(value: BindValue, params: BindValue[], index: number): { value: BindValue; nextIndex: number } {
+  if (value === '?') {
+    return { value: params[index], nextIndex: index + 1 };
+  }
+  return { value, nextIndex: index };
+}
+
+/**
  * Evalúa una fila contra una cláusula WHERE simplificada.
- * Soporta: col = ?, col IS NULL, col IS NOT NULL, col >= ?, col <= ?, col > ?, col < ?,
- * y combinaciones con AND.
+ * Soporta: col = ?, col = 1, col >= ?, col >= 100, col IS NULL,
+ * col IS NOT NULL, col > ?, col < ?, col <= ?, y combinaciones con AND.
  */
 function parseWhere(
   rows: Row[],
@@ -139,29 +152,51 @@ function parseWhere(
       return row[col] !== null && row[col] !== undefined;
     }
 
-    const matchEq = cond.match(/^(\w+)\s*=\s*\?$/i);
+    // col = ? o col = valor
+    const matchEq = cond.match(/^(\w+)\s*=\s*(\?|\d+|'[^']*'|"[^"]*")$/i);
     if (matchEq) {
-      return row[matchEq[1]] === getParam();
+      const col = matchEq[1];
+      const raw = matchEq[2];
+      const { value } = resolveParam(raw === '?' ? getParam() : raw, params, 0);
+      // raw es literal, no usamos getParam para literales
+      const literalValue = raw === '?' ? value : raw.replace(/^'|'$/g, '');
+      return row[col] === literalValue;
     }
 
-    const matchGte = cond.match(/^(\w+)\s*>=\s*\?$/i);
+    const matchGte = cond.match(/^(\w+)\s*>=\s*(\?|\d+)$/i);
     if (matchGte) {
-      return (row[matchGte[1]] as number) >= (getParam() as number);
+      const col = matchGte[1];
+      const raw = matchGte[2];
+      const { value, nextIndex } = resolveParam(raw === '?' ? getParam() : raw, params, paramIndex);
+      paramIndex = nextIndex;
+      return (row[col] as number) >= (value as number);
     }
 
-    const matchLte = cond.match(/^(\w+)\s*<=\s*\?$/i);
+    const matchLte = cond.match(/^(\w+)\s*<=\s*(\?|\d+)$/i);
     if (matchLte) {
-      return (row[matchLte[1]] as number) <= (getParam() as number);
+      const col = matchLte[1];
+      const raw = matchLte[2];
+      const { value, nextIndex } = resolveParam(raw === '?' ? getParam() : raw, params, paramIndex);
+      paramIndex = nextIndex;
+      return (row[col] as number) <= (value as number);
     }
 
-    const matchGt = cond.match(/^(\w+)\s*>\s*\?$/i);
+    const matchGt = cond.match(/^(\w+)\s*>\s*(\?|\d+)$/i);
     if (matchGt) {
-      return (row[matchGt[1]] as number) > (getParam() as number);
+      const col = matchGt[1];
+      const raw = matchGt[2];
+      const { value, nextIndex } = resolveParam(raw === '?' ? getParam() : raw, params, paramIndex);
+      paramIndex = nextIndex;
+      return (row[col] as number) > (value as number);
     }
 
-    const matchLt = cond.match(/^(\w+)\s*<\s*\?$/i);
+    const matchLt = cond.match(/^(\w+)\s*<\s*(\?|\d+)$/i);
     if (matchLt) {
-      return (row[matchLt[1]] as number) < (getParam() as number);
+      const col = matchLt[1];
+      const raw = matchLt[2];
+      const { value, nextIndex } = resolveParam(raw === '?' ? getParam() : raw, params, paramIndex);
+      paramIndex = nextIndex;
+      return (row[col] as number) < (value as number);
     }
 
     return true;
@@ -178,19 +213,24 @@ function parseOrderBy(
   if (!orderBySql) {
     return rows;
   }
-  const normalized = orderBySql.trim();
-  const parts = normalized.split(/\s+/);
-  // Formato esperado: "ts DESC, id DESC" o "col ASC"
-  const field = parts[0];
-  const direction = parts[1]?.toUpperCase() === 'DESC' ? -1 : 1;
-  return [...rows].sort((a, b) => {
-    const av = a[field];
-    const bv = b[field];
-    if (av === bv) return 0;
-    if (av == null) return -direction;
-    if (bv == null) return direction;
-    return (av as unknown as number) < (bv as unknown as number) ? -direction : direction;
-  });
+  // Soporta múltiples campos: "ts DESC, id DESC"
+  const orderParts = orderBySql.split(',');
+  let current = rows;
+  for (let i = orderParts.length - 1; i >= 0; i--) {
+    const part = orderParts[i].trim();
+    const parts = part.split(/\s+/);
+    const field = parts[0];
+    const direction = parts[1]?.toUpperCase() === 'DESC' ? -1 : 1;
+    current = [...current].sort((a, b) => {
+      const av = a[field];
+      const bv = b[field];
+      if (av === bv) return 0;
+      if (av == null) return -direction;
+      if (bv == null) return direction;
+      return (av as unknown as number) < (bv as unknown as number) ? -direction : direction;
+    });
+  }
+  return current;
 }
 
 /**
@@ -227,6 +267,15 @@ export class WebDatabase implements Database {
     }
 
     if (/^create table/i.test(normalized)) {
+      const tableName = extractTableName(normalized);
+      if (tableName && !this.tables.has(tableName)) {
+        this.tables.set(tableName, []);
+        this.persist();
+      }
+      return;
+    }
+
+    if (/^create table if not exists/i.test(normalized)) {
       const tableName = extractTableName(normalized);
       if (tableName && !this.tables.has(tableName)) {
         this.tables.set(tableName, []);
@@ -422,13 +471,7 @@ export class WebDatabase implements Database {
 
       let filtered = parseWhere(rows, whereRaw, params);
       if (orderByRaw) {
-        // Múltiples campos de ORDER BY separados por coma.
-        const orderParts = orderByRaw.split(',');
-        let current = filtered;
-        for (let i = orderParts.length - 1; i >= 0; i--) {
-          current = parseOrderBy(current, orderParts[i].trim());
-        }
-        filtered = current;
+        filtered = parseOrderBy(filtered, orderByRaw);
       }
 
       if (columns.length === 1 && columns[0] === '*') {
@@ -458,10 +501,28 @@ export class WebDatabase implements Database {
 
 let databasePromise: Promise<WebDatabase> | null = null;
 
-export function getDatabase(): Promise<WebDatabase> {
+export async function getDatabase(): Promise<WebDatabase> {
   if (!databasePromise) {
     databasePromise = (async () => {
       const db = new WebDatabase();
+
+      // Aplicar migraciones para crear las tablas en localStorage.
+      const meta = getMeta();
+      let currentVersion = meta.user_version;
+
+      const migrations = [...MIGRATIONS].sort((a, b) => a.version - b.version);
+
+      for (const migration of migrations) {
+        if (migration.version <= currentVersion) {
+          continue;
+        }
+        await db.withTransactionAsync(async () => {
+          await migration.up(db);
+          await db.execAsync(`PRAGMA user_version = ${migration.version}`);
+          currentVersion = migration.version;
+        });
+      }
+
       return db;
     })().catch((error) => {
       databasePromise = null;
