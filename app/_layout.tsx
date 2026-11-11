@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
 import { useEffect } from 'react';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { View, Platform, Dimensions, type ViewStyle } from 'react-native';
+import { View, Platform, type ViewStyle } from 'react-native';
 
 import { useBudgetStore } from '../src/store/useBudgetStore';
 import { useSettingsStore } from '../src/store/useSettingsStore';
@@ -48,7 +48,6 @@ function ThemedApp() {
   const insets = useSafeAreaInsets();
 
   const isWeb = Platform.OS === 'web';
-  const screenHeight = Dimensions.get('window').height;
 
   useEffect(() => {
     void initialize();
@@ -76,18 +75,32 @@ function ThemedApp() {
     };
   }, []);
 
-  // En web móvil: bloquear scroll del body y fijar viewport para que la app
-  // se comporte como nativa (no se mueve con el teclado, no hace zoom en inputs).
+  // En web móvil: resetear márgenes del body/html y bloquear scroll para que
+  // la app ocupe toda la pantalla sin barras blancas arriba/abajo.
   useEffect(() => {
     if (!isWeb) {
       return;
     }
     const body = document.body;
     const html = document.documentElement;
+
+    const prevBodyMargin = body.style.margin;
+    const prevBodyPadding = body.style.padding;
     const prevBodyOverflow = body.style.overflow;
+    const prevBodyHeight = body.style.height;
+    const prevHtmlMargin = html.style.margin;
+    const prevHtmlPadding = html.style.padding;
     const prevHtmlOverflow = html.style.overflow;
+    const prevHtmlHeight = html.style.height;
+
+    body.style.margin = '0';
+    body.style.padding = '0';
     body.style.overflow = 'hidden';
+    body.style.height = '100%';
+    html.style.margin = '0';
+    html.style.padding = '0';
     html.style.overflow = 'hidden';
+    html.style.height = '100%';
 
     // Fijar viewport para evitar zoom al tocar inputs en iOS/Android móvil.
     let meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
@@ -103,8 +116,14 @@ function ThemedApp() {
     );
 
     return () => {
+      body.style.margin = prevBodyMargin;
+      body.style.padding = prevBodyPadding;
       body.style.overflow = prevBodyOverflow;
+      body.style.height = prevBodyHeight;
+      html.style.margin = prevHtmlMargin;
+      html.style.padding = prevHtmlPadding;
       html.style.overflow = prevHtmlOverflow;
+      html.style.height = prevHtmlHeight;
       if (prevContent) {
         meta.setAttribute('content', prevContent);
       }
@@ -115,9 +134,8 @@ function ThemedApp() {
     width: '100%',
     ...(isWeb
       ? {
-          position: 'relative',
-          height: screenHeight,
-          minHeight: screenHeight,
+          position: 'fixed',
+          inset: 0,
           overflow: 'hidden',
         }
       : {}),
