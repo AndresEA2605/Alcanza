@@ -162,6 +162,26 @@ function ThemedApp() {
           <Stack.Screen name="balance" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="settings" />
           <Stack.Screen name="negocio" />
+          <Stack.Screen
+            name="negocio/tienda"
+            options={{ title: 'Mi Tienda' }}
+          />
+          <Stack.Screen
+            name="negocio/nuevo"
+            options={{ title: 'Nuevo producto' }}
+          />
+          <Stack.Screen
+            name="negocio/nueva-cuenta"
+            options={{ title: 'Nueva cuenta' }}
+          />
+          <Stack.Screen
+            name="negocio/ajustes"
+            options={{ title: 'Ajustes del negocio' }}
+          />
+          <Stack.Screen
+            name="negocio/editar\[id\]"
+            options={{ title: 'Editar producto' }}
+          />
         </Stack>
       </View>
     </>

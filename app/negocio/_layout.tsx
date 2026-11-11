@@ -1,24 +1,19 @@
-import { Stack } from 'expo-router';
+import { Slot } from 'expo-router';
+import { View, type ViewStyle } from 'react-native';
 
 import { useTheme } from '../../src/theme';
 
 export default function NegocioLayout() {
   const theme = useTheme();
 
+  const containerStyle: ViewStyle = {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  };
+
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        animation: 'fade',
-        contentStyle: { backgroundColor: theme.colors.background, flex: 1 },
-      }}
-    >
-      <Stack.Screen name="index" />
-      <Stack.Screen name="tienda" />
-      <Stack.Screen name="nuevo" />
-      <Stack.Screen name="nueva-cuenta" />
-      <Stack.Screen name="ajustes" />
-      <Stack.Screen name="editar\[id\]" />
-    </Stack>
+    <View style={containerStyle}>
+      <Slot />
+    </View>
   );
 }
