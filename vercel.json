@@ -2,5 +2,8 @@
   "buildCommand": "npm install && npx expo export -p web",
   "outputDirectory": "dist",
   "framework": null,
-  "regions": ["iad1"]
+  "regions": ["iad1"],
+  "rewrites": [
+    { "source": "/:path*", "destination": "/index.html" }
+  ]
 }
